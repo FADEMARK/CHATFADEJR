@@ -936,12 +936,15 @@ app.post(
         answer =
           `Lo recordaré, ${user.name}: ${memoryResult.value}.`;
       } else {
-        answer =
-          await generateLocalResponse(
-            history,
-            userMessage,
-            user
-          );
+        const brainResponse =
+  await brain.respond({
+    user,
+    message: userMessage,
+    history,
+    memories: await getMemories(user.id)
+  });
+
+answer = brainResponse.text;
       }
 
       await saveMessage(
