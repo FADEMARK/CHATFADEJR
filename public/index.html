@@ -15,18 +15,148 @@
       font-family: Arial, Helvetica, sans-serif;
       background: #0f1115;
       color: #ffffff;
+      min-height: 100vh;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .center-screen {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .auth-card {
+      width: 100%;
+      max-width: 420px;
+      background: #171b24;
+      border: 1px solid #2b313d;
+      border-radius: 18px;
+      padding: 28px;
+    }
+
+    .logo {
+      text-align: center;
+      font-size: 26px;
+      font-weight: bold;
+      margin-bottom: 8px;
+    }
+
+    .subtitle {
+      text-align: center;
+      color: #9ca5b4;
+      margin-bottom: 24px;
+    }
+
+    .tabs {
+      display: flex;
+      background: #10141b;
+      border-radius: 12px;
+      padding: 4px;
+      margin-bottom: 22px;
+    }
+
+    .tab {
+      flex: 1;
+      padding: 10px;
+      text-align: center;
+      cursor: pointer;
+      border-radius: 9px;
+      color: #aab2c0;
+    }
+
+    .tab.active {
+      background: #2c6bed;
+      color: #fff;
+    }
+
+    .field {
+      margin-bottom: 14px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 13px;
+      color: #cbd1db;
+    }
+
+    input {
+      width: 100%;
+      border: 1px solid #353c49;
+      background: #0f1115;
+      color: white;
+      border-radius: 10px;
+      padding: 12px 14px;
+      outline: none;
+      font-size: 15px;
+    }
+
+    input:focus {
+      border-color: #5d85f6;
+    }
+
+    .primary-button {
+      width: 100%;
+      border: none;
+      border-radius: 10px;
+      padding: 13px;
+      background: #2c6bed;
+      color: #fff;
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+
+    .primary-button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .error-box {
+      margin-top: 14px;
+      background: #3a1b1f;
+      border: 1px solid #70303a;
+      color: #ffb4bd;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 13px;
+    }
+
+    .success-box {
+      margin-top: 14px;
+      background: #17331f;
+      border: 1px solid #2e6840;
+      color: #b2f0c4;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 13px;
+    }
+
+    #app {
       height: 100vh;
       display: flex;
       flex-direction: column;
     }
 
     .header {
-      padding: 16px 20px;
+      height: 64px;
       border-bottom: 1px solid #2a2f3a;
+      background: #151922;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      background: #151922;
+      padding: 0 20px;
+    }
+
+    .brand-area {
+      display: flex;
+      align-items: center;
+      gap: 12px;
     }
 
     .brand {
@@ -35,8 +165,91 @@
     }
 
     .status {
-      font-size: 12px;
       color: #8ee89a;
+      font-size: 12px;
+    }
+
+    .user-area {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .user-name {
+      font-size: 14px;
+      color: #d7dce5;
+    }
+
+    .logout-button {
+      border: 1px solid #39414e;
+      background: transparent;
+      color: #ffffff;
+      padding: 8px 11px;
+      border-radius: 9px;
+      cursor: pointer;
+    }
+
+    .main {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+
+    .sidebar {
+      width: 280px;
+      background: #12161e;
+      border-right: 1px solid #2a2f3a;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sidebar-top {
+      padding: 14px;
+    }
+
+    .new-chat-button {
+      width: 100%;
+      border: 1px solid #39414e;
+      background: #1c222d;
+      color: white;
+      border-radius: 10px;
+      padding: 11px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    .conversation-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 6px 10px 14px;
+    }
+
+    .conversation-item {
+      padding: 10px 12px;
+      border-radius: 9px;
+      margin-bottom: 4px;
+      cursor: pointer;
+      color: #c7ced9;
+      font-size: 14px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .conversation-item:hover {
+      background: #1a202a;
+    }
+
+    .conversation-item.active {
+      background: #25304a;
+      color: #fff;
+    }
+
+    .chat-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
     }
 
     .chat-container {
@@ -52,7 +265,7 @@
       max-width: 75%;
       padding: 12px 16px;
       border-radius: 16px;
-      line-height: 1.4;
+      line-height: 1.45;
       white-space: pre-wrap;
       word-break: break-word;
     }
@@ -85,7 +298,7 @@
     textarea {
       flex: 1;
       resize: none;
-      min-height: 48px;
+      min-height: 50px;
       max-height: 140px;
       border-radius: 12px;
       border: 1px solid #353c49;
@@ -96,7 +309,7 @@
       outline: none;
     }
 
-    button {
+    .send-button {
       border: none;
       border-radius: 12px;
       padding: 0 18px;
@@ -106,22 +319,26 @@
       color: #111;
     }
 
-    button:disabled {
+    .send-button:disabled {
       opacity: 0.5;
       cursor: not-allowed;
     }
 
-    @media (max-width: 700px) {
+    @media (max-width: 800px) {
+      .sidebar {
+        display: none;
+      }
+
       .message {
         max-width: 88%;
       }
 
-      .chat-container {
-        padding: 16px;
+      .user-name {
+        display: none;
       }
 
-      .input-area {
-        padding: 12px;
+      .chat-container {
+        padding: 16px;
       }
     }
   </style>
@@ -129,108 +346,1091 @@
 
 <body>
 
-  <div class="header">
-    <div class="brand">CHATFADE JR</div>
-    <div class="status">● ONLINE</div>
-  </div>
+  <!-- LOGIN / REGISTER -->
+  <div id="authScreen" class="center-screen">
 
-  <div id="chat" class="chat-container">
-    <div class="message assistant">
-      Hola. Soy CHATFADE JR. ¿En qué puedo ayudarte?
+    <div class="auth-card">
+
+      <div class="logo">CHATFADE JR</div>
+
+      <div class="subtitle">
+        Tu inteligencia con memoria
+      </div>
+
+      <div class="tabs">
+        <div id="loginTab" class="tab active">
+          Iniciar sesión
+        </div>
+
+        <div id="registerTab" class="tab">
+          Crear cuenta
+        </div>
+      </div>
+
+      <!-- LOGIN -->
+
+      <div id="loginForm">
+
+        <div class="field">
+          <label>Correo</label>
+          <input
+            id="loginEmail"
+            type="email"
+            placeholder="tu@correo.com"
+          />
+        </div>
+
+        <div class="field">
+          <label>Contraseña</label>
+          <input
+            id="loginPassword"
+            type="password"
+            placeholder="Tu contraseña"
+          />
+        </div>
+
+        <button
+          id="loginButton"
+          class="primary-button"
+        >
+          Iniciar sesión
+        </button>
+
+      </div>
+
+
+      <!-- REGISTER -->
+
+      <div
+        id="registerForm"
+        class="hidden"
+      >
+
+        <div class="field">
+          <label>Nombre</label>
+          <input
+            id="registerName"
+            type="text"
+            placeholder="Tu nombre"
+          />
+        </div>
+
+        <div class="field">
+          <label>Correo</label>
+          <input
+            id="registerEmail"
+            type="email"
+            placeholder="tu@correo.com"
+          />
+        </div>
+
+        <div class="field">
+          <label>Contraseña</label>
+          <input
+            id="registerPassword"
+            type="password"
+            placeholder="Mínimo 8 caracteres"
+          />
+        </div>
+
+        <button
+          id="registerButton"
+          class="primary-button"
+        >
+          Crear cuenta
+        </button>
+
+      </div>
+
+
+      <div
+        id="authMessage"
+        class="hidden"
+      ></div>
+
     </div>
+
   </div>
 
-  <div class="input-area">
-    <textarea
-      id="messageInput"
-      placeholder="Escribe un mensaje..."
-    ></textarea>
 
-    <button id="sendButton">
-      Enviar
-    </button>
+  <!-- APP -->
+
+  <div
+    id="app"
+    class="hidden"
+  >
+
+    <div class="header">
+
+      <div class="brand-area">
+
+        <div class="brand">
+          CHATFADE JR
+        </div>
+
+        <div class="status">
+          ● ONLINE
+        </div>
+
+      </div>
+
+
+      <div class="user-area">
+
+        <div
+          id="currentUserName"
+          class="user-name"
+        ></div>
+
+        <button
+          id="logoutButton"
+          class="logout-button"
+        >
+          Salir
+        </button>
+
+      </div>
+
+    </div>
+
+
+    <div class="main">
+
+      <!-- SIDEBAR -->
+
+      <div class="sidebar">
+
+        <div class="sidebar-top">
+
+          <button
+            id="newChatButton"
+            class="new-chat-button"
+          >
+            + Nueva conversación
+          </button>
+
+        </div>
+
+        <div
+          id="conversationList"
+          class="conversation-list"
+        ></div>
+
+      </div>
+
+
+      <!-- CHAT -->
+
+      <div class="chat-panel">
+
+        <div
+          id="chat"
+          class="chat-container"
+        >
+
+          <div class="message assistant">
+            Hola. Soy CHATFADE JR.
+          </div>
+
+        </div>
+
+
+        <div class="input-area">
+
+          <textarea
+            id="messageInput"
+            placeholder="Escribe un mensaje..."
+          ></textarea>
+
+          <button
+            id="sendButton"
+            class="send-button"
+          >
+            Enviar
+          </button>
+
+        </div>
+
+      </div>
+
+    </div>
+
   </div>
+
 
   <script>
-    const chat = document.getElementById("chat");
-    const input = document.getElementById("messageInput");
-    const sendButton = document.getElementById("sendButton");
 
-    const USER_ID = "johan";
-    const USER_NAME = "Johan";
+    /*
+     * =====================================================
+     * ESTADO
+     * =====================================================
+     */
 
-    let conversationId =
-      localStorage.getItem("chatfadejr_conversation_id");
+    let token =
+      localStorage.getItem(
+        "chatfadejr_token"
+      );
 
-    function addMessage(text, role, extraClass = "") {
-      const div = document.createElement("div");
+    let currentUser = null;
+
+    let conversationId = null;
+
+
+    /*
+     * =====================================================
+     * ELEMENTOS
+     * =====================================================
+     */
+
+    const authScreen =
+      document.getElementById(
+        "authScreen"
+      );
+
+    const app =
+      document.getElementById(
+        "app"
+      );
+
+    const loginTab =
+      document.getElementById(
+        "loginTab"
+      );
+
+    const registerTab =
+      document.getElementById(
+        "registerTab"
+      );
+
+    const loginForm =
+      document.getElementById(
+        "loginForm"
+      );
+
+    const registerForm =
+      document.getElementById(
+        "registerForm"
+      );
+
+    const authMessage =
+      document.getElementById(
+        "authMessage"
+      );
+
+    const chat =
+      document.getElementById(
+        "chat"
+      );
+
+    const input =
+      document.getElementById(
+        "messageInput"
+      );
+
+    const sendButton =
+      document.getElementById(
+        "sendButton"
+      );
+
+    const conversationList =
+      document.getElementById(
+        "conversationList"
+      );
+
+    const currentUserName =
+      document.getElementById(
+        "currentUserName"
+      );
+
+
+    /*
+     * =====================================================
+     * HELPERS
+     * =====================================================
+     */
+
+    function showAuthMessage(
+      message,
+      type = "error"
+    ) {
+
+      authMessage.className =
+        type === "success"
+          ? "success-box"
+          : "error-box";
+
+      authMessage.textContent =
+        message;
+    }
+
+
+    function clearAuthMessage() {
+
+      authMessage.className =
+        "hidden";
+
+      authMessage.textContent =
+        "";
+    }
+
+
+    function showApp() {
+
+      authScreen.classList.add(
+        "hidden"
+      );
+
+      app.classList.remove(
+        "hidden"
+      );
+    }
+
+
+    function showAuth() {
+
+      app.classList.add(
+        "hidden"
+      );
+
+      authScreen.classList.remove(
+        "hidden"
+      );
+    }
+
+
+    function addMessage(
+      text,
+      role,
+      extraClass = ""
+    ) {
+
+      const div =
+        document.createElement(
+          "div"
+        );
 
       div.className =
         "message " +
         role +
-        (extraClass ? " " + extraClass : "");
+        (
+          extraClass
+            ? " " + extraClass
+            : ""
+        );
 
-      div.textContent = text;
+      div.textContent =
+        text;
 
-      chat.appendChild(div);
+      chat.appendChild(
+        div
+      );
 
-      chat.scrollTop = chat.scrollHeight;
+      chat.scrollTop =
+        chat.scrollHeight;
 
       return div;
     }
 
+
+    function resetChat() {
+
+      chat.innerHTML = "";
+
+      addMessage(
+        "Hola. Soy CHATFADE JR. ¿En qué puedo ayudarte?",
+        "assistant"
+      );
+    }
+
+
+    async function apiFetch(
+      url,
+      options = {}
+    ) {
+
+      options.headers =
+        options.headers || {};
+
+      if (token) {
+
+        options.headers[
+          "Authorization"
+        ] =
+          `Bearer ${token}`;
+      }
+
+
+      const response =
+        await fetch(
+          url,
+          options
+        );
+
+
+      let data = {};
+
+      try {
+
+        data =
+          await response.json();
+
+      } catch (error) {
+
+        data = {
+          status: "error",
+          message:
+            "Respuesta inválida del servidor"
+        };
+      }
+
+
+      if (
+        response.status === 401 &&
+        token
+      ) {
+
+        logout();
+
+        throw new Error(
+          "Sesión expirada"
+        );
+      }
+
+
+      return {
+        response,
+        data
+      };
+    }
+
+
+    /*
+     * =====================================================
+     * AUTH TABS
+     * =====================================================
+     */
+
+    loginTab.addEventListener(
+      "click",
+      () => {
+
+        clearAuthMessage();
+
+        loginTab.classList.add(
+          "active"
+        );
+
+        registerTab.classList.remove(
+          "active"
+        );
+
+        loginForm.classList.remove(
+          "hidden"
+        );
+
+        registerForm.classList.add(
+          "hidden"
+        );
+      }
+    );
+
+
+    registerTab.addEventListener(
+      "click",
+      () => {
+
+        clearAuthMessage();
+
+        registerTab.classList.add(
+          "active"
+        );
+
+        loginTab.classList.remove(
+          "active"
+        );
+
+        registerForm.classList.remove(
+          "hidden"
+        );
+
+        loginForm.classList.add(
+          "hidden"
+        );
+      }
+    );
+
+
+    /*
+     * =====================================================
+     * REGISTER
+     * =====================================================
+     */
+
+    document
+      .getElementById(
+        "registerButton"
+      )
+      .addEventListener(
+        "click",
+        async () => {
+
+          clearAuthMessage();
+
+          const name =
+            document
+              .getElementById(
+                "registerName"
+              )
+              .value
+              .trim();
+
+          const email =
+            document
+              .getElementById(
+                "registerEmail"
+              )
+              .value
+              .trim();
+
+          const password =
+            document
+              .getElementById(
+                "registerPassword"
+              )
+              .value;
+
+
+          try {
+
+            const response =
+              await fetch(
+                "/auth/register",
+                {
+                  method: "POST",
+
+                  headers: {
+                    "Content-Type":
+                      "application/json"
+                  },
+
+                  body:
+                    JSON.stringify({
+                      name,
+                      email,
+                      password
+                    })
+                }
+              );
+
+
+            const data =
+              await response.json();
+
+
+            if (
+              !response.ok ||
+              data.status !== "ok"
+            ) {
+
+              showAuthMessage(
+                data.message ||
+                  "No fue posible crear la cuenta"
+              );
+
+              return;
+            }
+
+
+            token =
+              data.token;
+
+            localStorage.setItem(
+              "chatfadejr_token",
+              token
+            );
+
+
+            await initializeApp();
+
+
+          } catch (error) {
+
+            showAuthMessage(
+              "No fue posible conectar con el servidor"
+            );
+          }
+        }
+      );
+
+
+    /*
+     * =====================================================
+     * LOGIN
+     * =====================================================
+     */
+
+    document
+      .getElementById(
+        "loginButton"
+      )
+      .addEventListener(
+        "click",
+        async () => {
+
+          clearAuthMessage();
+
+          const email =
+            document
+              .getElementById(
+                "loginEmail"
+              )
+              .value
+              .trim();
+
+          const password =
+            document
+              .getElementById(
+                "loginPassword"
+              )
+              .value;
+
+
+          try {
+
+            const response =
+              await fetch(
+                "/auth/login",
+                {
+                  method: "POST",
+
+                  headers: {
+                    "Content-Type":
+                      "application/json"
+                  },
+
+                  body:
+                    JSON.stringify({
+                      email,
+                      password
+                    })
+                }
+              );
+
+
+            const data =
+              await response.json();
+
+
+            if (
+              !response.ok ||
+              data.status !== "ok"
+            ) {
+
+              showAuthMessage(
+                data.message ||
+                  "No fue posible iniciar sesión"
+              );
+
+              return;
+            }
+
+
+            token =
+              data.token;
+
+            localStorage.setItem(
+              "chatfadejr_token",
+              token
+            );
+
+
+            await initializeApp();
+
+
+          } catch (error) {
+
+            showAuthMessage(
+              "No fue posible conectar con el servidor"
+            );
+          }
+        }
+      );
+
+
+    /*
+     * =====================================================
+     * LOGOUT
+     * =====================================================
+     */
+
+    function logout() {
+
+      token = null;
+
+      currentUser = null;
+
+      conversationId = null;
+
+      localStorage.removeItem(
+        "chatfadejr_token"
+      );
+
+      localStorage.removeItem(
+        "chatfadejr_conversation_id"
+      );
+
+      showAuth();
+    }
+
+
+    document
+      .getElementById(
+        "logoutButton"
+      )
+      .addEventListener(
+        "click",
+        logout
+      );
+
+
+    /*
+     * =====================================================
+     * INITIALIZE
+     * =====================================================
+     */
+
+    async function initializeApp() {
+
+      try {
+
+        const {
+          response,
+          data
+        } =
+          await apiFetch(
+            "/auth/me"
+          );
+
+
+        if (
+          !response.ok ||
+          data.status !== "ok"
+        ) {
+
+          logout();
+
+          return;
+        }
+
+
+        currentUser =
+          data.user;
+
+
+        currentUserName.textContent =
+          currentUser.name ||
+          currentUser.email;
+
+
+        showApp();
+
+
+        await loadConversations();
+
+
+        const storedConversation =
+          localStorage.getItem(
+            "chatfadejr_conversation_id"
+          );
+
+
+        if (storedConversation) {
+
+          await openConversation(
+            Number(
+              storedConversation
+            )
+          );
+
+        } else {
+
+          resetChat();
+        }
+
+
+      } catch (error) {
+
+        logout();
+      }
+    }
+
+
+    /*
+     * =====================================================
+     * CONVERSACIONES
+     * =====================================================
+     */
+
+    async function loadConversations() {
+
+      const {
+        response,
+        data
+      } =
+        await apiFetch(
+          "/conversations"
+        );
+
+
+      if (
+        !response.ok ||
+        data.status !== "ok"
+      ) {
+        return;
+      }
+
+
+      conversationList.innerHTML =
+        "";
+
+
+      data.conversations.forEach(
+        conversation => {
+
+          const div =
+            document.createElement(
+              "div"
+            );
+
+
+          div.className =
+            "conversation-item";
+
+
+          if (
+            Number(
+              conversation.id
+            ) ===
+            Number(
+              conversationId
+            )
+          ) {
+
+            div.classList.add(
+              "active"
+            );
+          }
+
+
+          div.textContent =
+            conversation.title ||
+            "Conversación";
+
+
+          div.addEventListener(
+            "click",
+            () => {
+
+              openConversation(
+                conversation.id
+              );
+            }
+          );
+
+
+          conversationList.appendChild(
+            div
+          );
+        }
+      );
+    }
+
+
+    async function openConversation(
+      id
+    ) {
+
+      const {
+        response,
+        data
+      } =
+        await apiFetch(
+          `/conversations/${id}/messages`
+        );
+
+
+      if (
+        !response.ok ||
+        data.status !== "ok"
+      ) {
+
+        conversationId = null;
+
+        localStorage.removeItem(
+          "chatfadejr_conversation_id"
+        );
+
+        resetChat();
+
+        return;
+      }
+
+
+      conversationId =
+        id;
+
+
+      localStorage.setItem(
+        "chatfadejr_conversation_id",
+        conversationId
+      );
+
+
+      chat.innerHTML = "";
+
+
+      data.messages.forEach(
+        message => {
+
+          addMessage(
+            message.content,
+            message.role === "user"
+              ? "user"
+              : "assistant"
+          );
+        }
+      );
+
+
+      await loadConversations();
+    }
+
+
+    document
+      .getElementById(
+        "newChatButton"
+      )
+      .addEventListener(
+        "click",
+        () => {
+
+          conversationId =
+            null;
+
+          localStorage.removeItem(
+            "chatfadejr_conversation_id"
+          );
+
+          resetChat();
+
+          loadConversations();
+
+          input.focus();
+        }
+      );
+
+
+    /*
+     * =====================================================
+     * CHAT
+     * =====================================================
+     */
+
     async function sendMessage() {
-      const message = input.value.trim();
+
+      const message =
+        input.value.trim();
+
 
       if (!message) {
         return;
       }
 
-      addMessage(message, "user");
+
+      addMessage(
+        message,
+        "user"
+      );
+
 
       input.value = "";
 
-      sendButton.disabled = true;
 
-      const thinking = addMessage(
-        "CHATFADE JR está pensando...",
-        "assistant",
-        "thinking"
-      );
+      sendButton.disabled =
+        true;
+
+
+      const thinking =
+        addMessage(
+          "CHATFADE JR está pensando...",
+          "assistant",
+          "thinking"
+        );
+
 
       try {
+
         const body = {
-          userId: USER_ID,
-          name: USER_NAME,
           message: message
         };
 
+
         if (conversationId) {
-          body.conversationId = Number(conversationId);
+
+          body.conversationId =
+            Number(
+              conversationId
+            );
         }
 
-        const response = await fetch("/chat", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify(body)
-        });
 
-        const data = await response.json();
+        const {
+          response,
+          data
+        } =
+          await apiFetch(
+            "/chat",
+            {
+              method: "POST",
+
+              headers: {
+                "Content-Type":
+                  "application/json"
+              },
+
+              body:
+                JSON.stringify(
+                  body
+                )
+            }
+          );
+
 
         thinking.remove();
 
-        if (!response.ok || data.status !== "ok") {
+
+        if (
+          !response.ok ||
+          data.status !== "ok"
+        ) {
+
           addMessage(
-            data.message || "Ocurrió un error.",
+            data.message ||
+              "Ocurrió un error.",
             "assistant"
           );
+
           return;
         }
 
-        if (data.conversation?.id) {
-          conversationId = data.conversation.id;
+
+        if (
+          data.conversation?.id
+        ) {
+
+          conversationId =
+            data.conversation.id;
+
 
           localStorage.setItem(
             "chatfadejr_conversation_id",
@@ -238,43 +1438,82 @@
           );
         }
 
+
         addMessage(
-          data.response || "Sin respuesta.",
+          data.response ||
+            "Sin respuesta.",
           "assistant"
         );
 
+
+        await loadConversations();
+
+
       } catch (error) {
+
         thinking.remove();
+
 
         addMessage(
           "No pude comunicarme con el servidor.",
           "assistant"
         );
 
-        console.error(error);
+
+        console.error(
+          error
+        );
+
       } finally {
-        sendButton.disabled = false;
+
+        sendButton.disabled =
+          false;
+
+
         input.focus();
       }
     }
+
 
     sendButton.addEventListener(
       "click",
       sendMessage
     );
 
+
     input.addEventListener(
       "keydown",
-      function(event) {
+      event => {
+
         if (
-          event.key === "Enter" &&
+          event.key ===
+            "Enter" &&
           !event.shiftKey
         ) {
+
           event.preventDefault();
+
           sendMessage();
         }
       }
     );
+
+
+    /*
+     * =====================================================
+     * START FRONTEND
+     * =====================================================
+     */
+
+    if (token) {
+
+      initializeApp();
+
+    } else {
+
+      showAuth();
+    }
+
   </script>
 
 </body>
