@@ -2,8 +2,9 @@
  * =========================================================
  * CHATFADE JR
  * OLLAMA PROVIDER
- * Version 0.7.4
+ * Version 0.8.1
  * Optimizado para Render Free
+ * Soporte de salida JSON estructurada
  * =========================================================
  */
 
@@ -27,11 +28,6 @@ export class OllamaProvider {
       process.env.BRAIN_API_KEY ||
       null;
 
-    /*
-     * Timeout máximo por petición.
-     * Render Free puede tardar bastante
-     * cuando despierta o carga el modelo.
-     */
     this.timeoutMs =
       Number(
         options.timeoutMs ||
@@ -43,7 +39,7 @@ export class OllamaProvider {
 
   /*
    * =======================================================
-   * VERIFICAR CONFIGURACIÓN
+   * CONFIGURACION
    * =======================================================
    */
 
@@ -58,14 +54,17 @@ export class OllamaProvider {
 
   /*
    * =======================================================
-   * GENERAR RESPUESTA
+   * GENERAR
    * =======================================================
    */
 
   async generate({
     systemPrompt,
     messages = [],
-    temperature = 0.6
+    temperature = 0.6,
+    format = null,
+    maxTokens = 120,
+    contextSize = 512
   }) {
 
     if (!this.isConfigured()) {
@@ -86,8 +85,8 @@ export class OllamaProvider {
 
 
     /*
-     * Preparado para proteger
-     * CHATFADE-BRAIN más adelante.
+     * Para cuando protejamos
+     * CHATFADE-BRAIN con token.
      */
     if (this.apiKey) {
 
@@ -98,16 +97,13 @@ export class OllamaProvider {
 
     /*
      * =====================================================
-     * PREPARAR MENSAJES
+     * MENSAJES
      * =====================================================
      */
 
     const requestMessages = [];
 
 
-    /*
-     * System Prompt
-     */
     if (systemPrompt) {
 
       requestMessages.push({
@@ -117,9 +113,6 @@ export class OllamaProvider {
     }
 
 
-    /*
-     * Historial
-     */
     for (const message of messages) {
 
       if (
@@ -136,7 +129,6 @@ export class OllamaProvider {
       if (
         message.role === "assistant"
       ) {
-
         role = "assistant";
       }
 
@@ -144,7 +136,6 @@ export class OllamaProvider {
       if (
         message.role === "system"
       ) {
-
         role = "system";
       }
 
@@ -154,6 +145,56 @@ export class OllamaProvider {
         content:
           String(message.content)
       });
+    }
+
+
+    /*
+     * =====================================================
+     * BODY
+     * =====================================================
+     */
+
+    const body = {
+
+      model:
+        this.model,
+
+      messages:
+        requestMessages,
+
+      stream:
+        false,
+
+      /*
+       * Mantener el modelo cargado.
+       */
+      keep_alive:
+        "5m",
+
+      options: {
+
+        temperature:
+          temperature,
+
+        num_ctx:
+          contextSize,
+
+        num_predict:
+          maxTokens,
+
+        num_thread:
+          1
+      }
+    };
+
+
+    /*
+     * Ollama puede forzar JSON.
+     */
+    if (format) {
+
+      body.format =
+        format;
     }
 
 
@@ -178,12 +219,6 @@ export class OllamaProvider {
 
     try {
 
-      /*
-       * ===================================================
-       * REQUEST A OLLAMA
-       * ===================================================
-       */
-
       const response =
         await fetch(
           url,
@@ -196,76 +231,12 @@ export class OllamaProvider {
               controller.signal,
 
             body:
-              JSON.stringify({
-
-                model:
-                  this.model,
-
-                messages:
-                  requestMessages,
-
-                stream:
-                  false,
-
-                /*
-                 * Mantener el modelo cargado
-                 * algunos minutos.
-                 *
-                 * Esto ayuda muchísimo porque
-                 * cargar Qwen desde cero es lento.
-                 */
-                keep_alive:
-                  "5m",
-
-                /*
-                 * Opciones especialmente reducidas
-                 * para Render Free (~512 MB RAM).
-                 */
-                options: {
-
-                  temperature:
-                    temperature,
-
-                  /*
-                   * Contexto reducido.
-                   *
-                   * Antes:
-                   * 1024
-                   *
-                   * Ahora:
-                   * 512
-                   */
-                  num_ctx:
-                    512,
-
-                  /*
-                   * Respuestas más cortas.
-                   *
-                   * Reduce tiempo y memoria.
-                   */
-                  num_predict:
-                    120,
-
-                  /*
-                   * Un solo thread inicialmente.
-                   *
-                   * Render Free tiene muy poca CPU.
-                   */
-                  num_thread:
-                    1
-
-                }
-
-              })
+              JSON.stringify(
+                body
+              )
           }
         );
 
-
-      /*
-       * ===================================================
-       * ERROR HTTP
-       * ===================================================
-       */
 
       if (!response.ok) {
 
@@ -278,12 +249,6 @@ export class OllamaProvider {
         );
       }
 
-
-      /*
-       * ===================================================
-       * RESPUESTA JSON
-       * ===================================================
-       */
 
       const data =
         await response.json();
@@ -343,17 +308,10 @@ export class OllamaProvider {
         evalDuration:
           data.eval_duration ||
           null
-
       };
 
 
     } catch (error) {
-
-      /*
-       * ===================================================
-       * TIMEOUT
-       * ===================================================
-       */
 
       if (
         error.name ===
@@ -382,7 +340,7 @@ export class OllamaProvider {
 
   /*
    * =======================================================
-   * COMPROBAR ESTADO
+   * HEALTH
    * =======================================================
    */
 
@@ -455,7 +413,6 @@ export class OllamaProvider {
 
         message:
           error.message
-
       };
     }
   }
