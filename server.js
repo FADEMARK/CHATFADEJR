@@ -185,7 +185,23 @@ async function createConversation(userId, title) {
  * =========================================================
  */
 async function saveMessage(conversationId, role, content) {
+async function getConversationContext(conversationId) {
+  const result = await pool.query(
+    `
+      SELECT
+        role,
+        content,
+        created_at
+      FROM chatfade_jr.messages
+      WHERE conversation_id = $1
+      ORDER BY created_at ASC, id ASC
+      LIMIT 20
+    `,
+    [conversationId]
+  );
 
+  return result.rows;
+}
   const result = await pool.query(
     `
       INSERT INTO chatfade_jr.messages (
