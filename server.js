@@ -2,6 +2,7 @@ import express from "express";
 import pg from "pg";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { brain } from "./src/brain/brain.js";
 
 const { Pool } = pg;
 
