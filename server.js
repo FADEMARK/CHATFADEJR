@@ -4,10 +4,14 @@ import pg from "pg";
 const { Pool } = pg;
 
 const app = express();
+
 app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 
+/*
+ * PostgreSQL
+ */
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: {
@@ -15,34 +19,47 @@ const pool = new Pool({
   }
 });
 
+
 /*
- * Página principal
+ * =========================================================
+ * HOME
+ * =========================================================
  */
 app.get("/", (req, res) => {
   res.json({
     name: "CHATFADE JR",
-    version: "0.2.0",
+    version: "0.3.0",
     status: "online",
-    message: "Hola. Soy CHATFADE JR."
+    message: "Hola. Soy CHATFADE JR.",
+    memory: "enabled"
   });
 });
 
+
 /*
- * Health Check
+ * =========================================================
+ * HEALTH CHECK
+ * =========================================================
  */
 app.get("/health", (req, res) => {
   res.status(200).json({
     status: "ok",
     service: "chatfade-jr",
+    version: "0.3.0",
     timestamp: new Date().toISOString()
   });
 });
 
+
 /*
- * Test de base de datos
+ * =========================================================
+ * DB TEST
+ * =========================================================
  */
 app.get("/db-test", async (req, res) => {
+
   try {
+
     const result = await pool.query(`
       SELECT
         NOW() AS database_time,
@@ -57,6 +74,7 @@ app.get("/db-test", async (req, res) => {
     });
 
   } catch (error) {
+
     console.error("Error PostgreSQL:", error);
 
     res.status(500).json({
@@ -64,126 +82,387 @@ app.get("/db-test", async (req, res) => {
       message: "No fue posible conectar con PostgreSQL"
     });
   }
+
 });
 
-/*
- * Setup protegido
- */
-app.post("/admin/setup-memory", async (req, res) => {
-  try {
-    const token = req.headers["x-admin-token"];
 
-    if (
-      !process.env.SETUP_ADMIN_TOKEN ||
-      token !== process.env.SETUP_ADMIN_TOKEN
-    ) {
-      return res.status(401).json({
+/*
+ * =========================================================
+ * OBTENER / CREAR USUARIO
+ * =========================================================
+ */
+async function getOrCreateUser(externalId, name) {
+
+  const existingUser = await pool.query(
+    `
+      SELECT id, external_id, name
+      FROM chatfade_jr.users
+      WHERE external_id = $1
+    `,
+    [externalId]
+  );
+
+
+  if (existingUser.rows.length > 0) {
+
+    const user = existingUser.rows[0];
+
+    /*
+     * Actualizar nombre si cambió.
+     */
+    if (name && user.name !== name) {
+
+      const updated = await pool.query(
+        `
+          UPDATE chatfade_jr.users
+          SET
+            name = $1,
+            updated_at = NOW()
+          WHERE id = $2
+          RETURNING id, external_id, name
+        `,
+        [name, user.id]
+      );
+
+      return updated.rows[0];
+    }
+
+
+    return user;
+  }
+
+
+  const newUser = await pool.query(
+    `
+      INSERT INTO chatfade_jr.users (
+        external_id,
+        name
+      )
+      VALUES ($1, $2)
+      RETURNING id, external_id, name
+    `,
+    [
+      externalId,
+      name || null
+    ]
+  );
+
+
+  return newUser.rows[0];
+}
+
+
+/*
+ * =========================================================
+ * CREAR CONVERSACIÓN
+ * =========================================================
+ */
+async function createConversation(userId, title) {
+
+  const result = await pool.query(
+    `
+      INSERT INTO chatfade_jr.conversations (
+        user_id,
+        title
+      )
+      VALUES ($1, $2)
+      RETURNING id, title, created_at
+    `,
+    [
+      userId,
+      title
+    ]
+  );
+
+
+  return result.rows[0];
+}
+
+
+/*
+ * =========================================================
+ * GUARDAR MENSAJE
+ * =========================================================
+ */
+async function saveMessage(conversationId, role, content) {
+
+  const result = await pool.query(
+    `
+      INSERT INTO chatfade_jr.messages (
+        conversation_id,
+        role,
+        content
+      )
+      VALUES ($1, $2, $3)
+      RETURNING id, role, content, created_at
+    `,
+    [
+      conversationId,
+      role,
+      content
+    ]
+  );
+
+
+  await pool.query(
+    `
+      UPDATE chatfade_jr.conversations
+      SET updated_at = NOW()
+      WHERE id = $1
+    `,
+    [conversationId]
+  );
+
+
+  return result.rows[0];
+}
+
+
+/*
+ * =========================================================
+ * CHAT
+ * =========================================================
+ *
+ * Por ahora CHATFADE JR todavía NO utiliza
+ * ningún modelo externo.
+ *
+ * Primero estamos comprobando:
+ *
+ * - usuarios
+ * - conversaciones
+ * - mensajes
+ * - persistencia
+ *
+ */
+app.post("/chat", async (req, res) => {
+
+  try {
+
+    const {
+      userId,
+      name,
+      message,
+      conversationId
+    } = req.body;
+
+
+    if (!userId) {
+
+      return res.status(400).json({
         status: "error",
-        message: "No autorizado"
+        message: "userId es obligatorio"
       });
     }
 
-    await pool.query(`
-      CREATE SCHEMA IF NOT EXISTS chatfade_jr
-    `);
+
+    if (!message || !String(message).trim()) {
+
+      return res.status(400).json({
+        status: "error",
+        message: "message es obligatorio"
+      });
+    }
+
 
     /*
-     * USERS
+     * Usuario
      */
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS chatfade_jr.users (
-        id BIGSERIAL PRIMARY KEY,
-        external_id VARCHAR(150) UNIQUE,
-        name VARCHAR(200),
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      )
-    `);
+    const user = await getOrCreateUser(
+      String(userId),
+      name
+    );
+
 
     /*
-     * CONVERSATIONS
+     * Conversación
      */
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS chatfade_jr.conversations (
-        id BIGSERIAL PRIMARY KEY,
-        user_id BIGINT REFERENCES chatfade_jr.users(id) ON DELETE CASCADE,
-        title VARCHAR(300),
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      )
-    `);
+    let conversation;
+
+
+    if (conversationId) {
+
+      const existingConversation = await pool.query(
+        `
+          SELECT id, user_id, title
+          FROM chatfade_jr.conversations
+          WHERE id = $1
+            AND user_id = $2
+        `,
+        [
+          conversationId,
+          user.id
+        ]
+      );
+
+
+      if (existingConversation.rows.length === 0) {
+
+        return res.status(404).json({
+          status: "error",
+          message: "Conversación no encontrada"
+        });
+      }
+
+
+      conversation = existingConversation.rows[0];
+
+    } else {
+
+      let title = String(message)
+        .trim()
+        .substring(0, 80);
+
+
+      conversation = await createConversation(
+        user.id,
+        title
+      );
+    }
+
 
     /*
-     * MESSAGES
+     * Guardar mensaje del usuario
      */
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS chatfade_jr.messages (
-        id BIGSERIAL PRIMARY KEY,
-        conversation_id BIGINT REFERENCES chatfade_jr.conversations(id) ON DELETE CASCADE,
-        role VARCHAR(30) NOT NULL,
-        content TEXT NOT NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      )
-    `);
+    await saveMessage(
+      conversation.id,
+      "user",
+      String(message).trim()
+    );
+
 
     /*
-     * MEMORIES
+     * =====================================================
+     * RESPUESTA TEMPORAL DE CHATFADE JR
+     * =====================================================
+     *
+     * Todavía no conectamos el modelo.
+     *
+     * Esta respuesta sirve para comprobar que
+     * la memoria funciona correctamente.
      */
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS chatfade_jr.memories (
-        id BIGSERIAL PRIMARY KEY,
-        user_id BIGINT REFERENCES chatfade_jr.users(id) ON DELETE CASCADE,
-        memory_key VARCHAR(200),
-        memory_value TEXT NOT NULL,
-        importance INTEGER NOT NULL DEFAULT 5,
-        source VARCHAR(100),
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      )
-    `);
+    const answer =
+      `Te escuché${user.name ? ", " + user.name : ""}. ` +
+      `Dijiste: "${String(message).trim()}". ` +
+      `Ya guardé este mensaje en mi memoria.`;
+
 
     /*
-     * KNOWLEDGE
+     * Guardar respuesta
      */
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS chatfade_jr.knowledge (
-        id BIGSERIAL PRIMARY KEY,
-        title VARCHAR(300),
-        content TEXT NOT NULL,
-        category VARCHAR(100),
-        source VARCHAR(300),
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      )
-    `);
+    await saveMessage(
+      conversation.id,
+      "assistant",
+      answer
+    );
 
-    const result = await pool.query(`
-      SELECT table_name
-      FROM information_schema.tables
-      WHERE table_schema = 'chatfade_jr'
-      ORDER BY table_name
-    `);
 
     res.json({
       status: "ok",
-      message: "Memoria inicial de CHATFADE JR creada correctamente",
-      tables: result.rows.map(row => row.table_name)
+
+      assistant: {
+        name: "CHATFADE JR",
+        version: "0.3.0"
+      },
+
+      user: {
+        id: user.id,
+        externalId: user.external_id,
+        name: user.name
+      },
+
+      conversation: {
+        id: conversation.id,
+        title: conversation.title
+      },
+
+      response: answer
     });
 
+
   } catch (error) {
-    console.error("Error creando memoria:", error);
+
+    console.error("Error /chat:", error);
 
     res.status(500).json({
       status: "error",
-      message: "No fue posible crear la memoria inicial",
-      error: error.message
+      message: "CHATFADE JR tuvo un problema procesando el mensaje"
     });
   }
+
 });
 
+
 /*
- * Iniciar servidor
+ * =========================================================
+ * HISTORIAL DE CONVERSACIÓN
+ * =========================================================
+ */
+app.get("/conversations/:conversationId/messages", async (req, res) => {
+
+  try {
+
+    const conversationId = Number(
+      req.params.conversationId
+    );
+
+
+    if (!conversationId) {
+
+      return res.status(400).json({
+        status: "error",
+        message: "conversationId inválido"
+      });
+    }
+
+
+    const messages = await pool.query(
+      `
+        SELECT
+          id,
+          role,
+          content,
+          created_at
+        FROM chatfade_jr.messages
+        WHERE conversation_id = $1
+        ORDER BY created_at ASC, id ASC
+      `,
+      [conversationId]
+    );
+
+
+    res.json({
+      status: "ok",
+      conversationId: conversationId,
+      messages: messages.rows
+    });
+
+
+  } catch (error) {
+
+    console.error(
+      "Error obteniendo conversación:",
+      error
+    );
+
+
+    res.status(500).json({
+      status: "error",
+      message: "No fue posible obtener la conversación"
+    });
+  }
+
+});
+
+
+/*
+ * =========================================================
+ * INICIAR CHATFADE JR
+ * =========================================================
  */
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`CHATFADE JR iniciado en puerto ${PORT}`);
+
+  console.log(
+    `CHATFADE JR v0.3.0 iniciado en puerto ${PORT}`
+  );
+
 });
