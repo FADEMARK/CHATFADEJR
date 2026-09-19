@@ -6,6 +6,7 @@ const { Pool } = pg;
 const app = express();
 
 app.use(express.json());
+app.use(express.static("public"));
 
 const PORT = process.env.PORT || 3000;
 
@@ -29,15 +30,6 @@ const pool = new Pool({
  * =========================================================
  */
 
-app.get("/", (req, res) => {
-  res.json({
-    name: "CHATFADE JR",
-    version: "0.4.0",
-    status: "online",
-    memory: "enabled",
-    message: "Hola. Soy CHATFADE JR."
-  });
-});
 
 
 /*
