@@ -2,10 +2,8 @@
  * =========================================================
  * CHATFADE JR
  * OLLAMA PROVIDER
- * Version 0.7.2
- * =========================================================
- *
- * Conecta CHATFADE JR con nuestro servidor Ollama.
+ * Version 0.7.4
+ * Optimizado para Render Free
  * =========================================================
  */
 
@@ -29,12 +27,23 @@ export class OllamaProvider {
       process.env.BRAIN_API_KEY ||
       null;
 
+    /*
+     * Timeout máximo por petición.
+     * Render Free puede tardar bastante
+     * cuando despierta o carga el modelo.
+     */
+    this.timeoutMs =
+      Number(
+        options.timeoutMs ||
+        process.env.BRAIN_TIMEOUT_MS ||
+        120000
+      );
   }
 
 
   /*
    * =======================================================
-   * VERIFICAR CONFIGURACION
+   * VERIFICAR CONFIGURACIÓN
    * =======================================================
    */
 
@@ -44,7 +53,6 @@ export class OllamaProvider {
       this.baseURL &&
       this.model
     );
-
   }
 
 
@@ -57,7 +65,7 @@ export class OllamaProvider {
   async generate({
     systemPrompt,
     messages = [],
-    temperature = 0.7
+    temperature = 0.6
   }) {
 
     if (!this.isConfigured()) {
@@ -65,7 +73,6 @@ export class OllamaProvider {
       throw new Error(
         "Ollama Provider no está configurado."
       );
-
     }
 
 
@@ -79,39 +86,40 @@ export class OllamaProvider {
 
 
     /*
-     * Preparado para cuando protejamos
-     * CHATFADE-BRAIN con una API KEY.
+     * Preparado para proteger
+     * CHATFADE-BRAIN más adelante.
      */
-
     if (this.apiKey) {
 
       headers.Authorization =
         `Bearer ${this.apiKey}`;
-
     }
 
+
+    /*
+     * =====================================================
+     * PREPARAR MENSAJES
+     * =====================================================
+     */
 
     const requestMessages = [];
 
 
     /*
-     * IDENTIDAD / SYSTEM PROMPT
+     * System Prompt
      */
-
     if (systemPrompt) {
 
       requestMessages.push({
         role: "system",
-        content: systemPrompt
+        content: String(systemPrompt)
       });
-
     }
 
 
     /*
-     * HISTORIAL
+     * Historial
      */
-
     for (const message of messages) {
 
       if (
@@ -124,9 +132,11 @@ export class OllamaProvider {
 
       let role = "user";
 
+
       if (
         message.role === "assistant"
       ) {
+
         role = "assistant";
       }
 
@@ -134,6 +144,7 @@ export class OllamaProvider {
       if (
         message.role === "system"
       ) {
+
         role = "system";
       }
 
@@ -143,125 +154,310 @@ export class OllamaProvider {
         content:
           String(message.content)
       });
-
     }
 
 
     /*
-     * LLAMADA A OLLAMA
+     * =====================================================
+     * TIMEOUT
+     * =====================================================
      */
 
-    const response =
-      await fetch(
-        url,
-        {
-          method: "POST",
+    const controller =
+      new AbortController();
 
-          headers,
 
-          body:
-            JSON.stringify({
+    const timeout =
+      setTimeout(
+        () => {
+          controller.abort();
+        },
+        this.timeoutMs
+      );
 
-              model:
-                this.model,
 
-              messages:
-                requestMessages,
+    try {
 
-              stream:
-                false,
+      /*
+       * ===================================================
+       * REQUEST A OLLAMA
+       * ===================================================
+       */
 
-              options: {
+      const response =
+        await fetch(
+          url,
+          {
+            method: "POST",
 
-                temperature:
-                  temperature,
+            headers,
+
+            signal:
+              controller.signal,
+
+            body:
+              JSON.stringify({
+
+                model:
+                  this.model,
+
+                messages:
+                  requestMessages,
+
+                stream:
+                  false,
 
                 /*
-                 * Reducimos contexto para
-                 * consumir menos RAM.
+                 * Mantener el modelo cargado
+                 * algunos minutos.
+                 *
+                 * Esto ayuda muchísimo porque
+                 * cargar Qwen desde cero es lento.
                  */
-
-                num_ctx:
-                  1024,
+                keep_alive:
+                  "5m",
 
                 /*
-                 * Respuestas relativamente
-                 * cortas mientras usamos
-                 * Render Free.
+                 * Opciones especialmente reducidas
+                 * para Render Free (~512 MB RAM).
                  */
+                options: {
 
-                num_predict:
-                  250
+                  temperature:
+                    temperature,
 
-              }
+                  /*
+                   * Contexto reducido.
+                   *
+                   * Antes:
+                   * 1024
+                   *
+                   * Ahora:
+                   * 512
+                   */
+                  num_ctx:
+                    512,
 
-            })
-        }
+                  /*
+                   * Respuestas más cortas.
+                   *
+                   * Reduce tiempo y memoria.
+                   */
+                  num_predict:
+                    120,
+
+                  /*
+                   * Un solo thread inicialmente.
+                   *
+                   * Render Free tiene muy poca CPU.
+                   */
+                  num_thread:
+                    1
+
+                }
+
+              })
+          }
+        );
+
+
+      /*
+       * ===================================================
+       * ERROR HTTP
+       * ===================================================
+       */
+
+      if (!response.ok) {
+
+        const errorText =
+          await response.text();
+
+
+        throw new Error(
+          `Ollama HTTP ${response.status}: ${errorText}`
+        );
+      }
+
+
+      /*
+       * ===================================================
+       * RESPUESTA JSON
+       * ===================================================
+       */
+
+      const data =
+        await response.json();
+
+
+      const text =
+        data?.message?.content;
+
+
+      if (!text) {
+
+        throw new Error(
+          "Ollama no devolvió contenido."
+        );
+      }
+
+
+      return {
+
+        text:
+          String(text).trim(),
+
+        model:
+          data.model ||
+          this.model,
+
+        provider:
+          this.name,
+
+        done:
+          data.done ?? true,
+
+        doneReason:
+          data.done_reason ||
+          null,
+
+        totalDuration:
+          data.total_duration ||
+          null,
+
+        loadDuration:
+          data.load_duration ||
+          null,
+
+        promptEvalCount:
+          data.prompt_eval_count ||
+          null,
+
+        promptEvalDuration:
+          data.prompt_eval_duration ||
+          null,
+
+        evalCount:
+          data.eval_count ||
+          null,
+
+        evalDuration:
+          data.eval_duration ||
+          null
+
+      };
+
+
+    } catch (error) {
+
+      /*
+       * ===================================================
+       * TIMEOUT
+       * ===================================================
+       */
+
+      if (
+        error.name ===
+        "AbortError"
+      ) {
+
+        throw new Error(
+          `CHATFADE-BRAIN tardó más de ${Math.round(
+            this.timeoutMs / 1000
+          )} segundos en responder.`
+        );
+      }
+
+
+      throw error;
+
+
+    } finally {
+
+      clearTimeout(
+        timeout
       );
+    }
+  }
 
 
-    /*
-     * ERROR HTTP
-     */
+  /*
+   * =======================================================
+   * COMPROBAR ESTADO
+   * =======================================================
+   */
 
-    if (!response.ok) {
+  async health() {
 
-      const errorText =
-        await response.text();
+    if (!this.baseURL) {
 
-      throw new Error(
-        `Ollama HTTP ${response.status}: ${errorText}`
-      );
-
+      return {
+        status: "error",
+        message:
+          "BRAIN_BASE_URL no configurado"
+      };
     }
 
 
-    /*
-     * RESPUESTA
-     */
+    try {
 
-    const data =
-      await response.json();
-
-
-    const text =
-      data?.message?.content;
+      const response =
+        await fetch(
+          `${this.baseURL.replace(/\/$/, "")}/api/tags`
+        );
 
 
-    if (!text) {
+      if (!response.ok) {
 
-      throw new Error(
-        "Ollama no devolvió contenido."
-      );
+        return {
+          status: "error",
+          httpStatus:
+            response.status
+        };
+      }
 
+
+      const data =
+        await response.json();
+
+
+      const models =
+        Array.isArray(
+          data.models
+        )
+          ? data.models.map(
+              model => model.name
+            )
+          : [];
+
+
+      return {
+
+        status: "ok",
+
+        model:
+          this.model,
+
+        modelAvailable:
+          models.includes(
+            this.model
+          ),
+
+        models:
+          models
+      };
+
+
+    } catch (error) {
+
+      return {
+
+        status: "error",
+
+        message:
+          error.message
+
+      };
     }
-
-
-    return {
-
-      text:
-        String(text).trim(),
-
-      model:
-        data.model ||
-        this.model,
-
-      provider:
-        this.name,
-
-      done:
-        data.done ?? true,
-
-      totalDuration:
-        data.total_duration ||
-        null,
-
-      evalCount:
-        data.eval_count ||
-        null
-
-    };
-
   }
 
 }
@@ -269,7 +465,7 @@ export class OllamaProvider {
 
 /*
  * =========================================================
- * INSTANCIA
+ * INSTANCIA PRINCIPAL
  * =========================================================
  */
 
