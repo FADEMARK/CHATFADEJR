@@ -2,6 +2,7 @@ import express from "express";
 import pg from "pg";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+
 import { brain } from "./src/brain/brain.js";
 
 const { Pool } = pg;
@@ -12,7 +13,6 @@ app.use(express.json());
 app.use(express.static("public"));
 
 const PORT = process.env.PORT || 3000;
-
 const JWT_SECRET = process.env.JWT_SECRET;
 
 if (!JWT_SECRET) {
@@ -38,8 +38,8 @@ app.get("/health", (req, res) => {
   res.json({
     status: "ok",
     service: "chatfade-jr",
-    version: "0.6.0",
-    auth: "enabled",
+    version: "0.7.3",
+    brain: "enabled",
     timestamp: new Date().toISOString()
   });
 });
@@ -52,6 +52,7 @@ app.get("/health", (req, res) => {
  */
 
 async function ensureAuthColumns() {
+
   await pool.query(`
     ALTER TABLE chatfade_jr.users
     ADD COLUMN IF NOT EXISTS email VARCHAR(320)
@@ -77,6 +78,7 @@ async function ensureAuthColumns() {
  */
 
 function createToken(user) {
+
   return jwt.sign(
     {
       userId: user.id,
@@ -92,21 +94,26 @@ function createToken(user) {
 
 
 function authMiddleware(req, res, next) {
-  const authHeader = req.headers.authorization;
+
+  const authHeader =
+    req.headers.authorization;
 
   if (!authHeader) {
+
     return res.status(401).json({
       status: "error",
       message: "Token requerido"
     });
   }
 
-  const parts = authHeader.split(" ");
+  const parts =
+    authHeader.split(" ");
 
   if (
     parts.length !== 2 ||
     parts[0] !== "Bearer"
   ) {
+
     return res.status(401).json({
       status: "error",
       message: "Token inválido"
@@ -114,16 +121,19 @@ function authMiddleware(req, res, next) {
   }
 
   try {
-    const decoded = jwt.verify(
-      parts[1],
-      JWT_SECRET
-    );
+
+    const decoded =
+      jwt.verify(
+        parts[1],
+        JWT_SECRET
+      );
 
     req.auth = decoded;
 
     next();
 
   } catch (error) {
+
     return res.status(401).json({
       status: "error",
       message: "Sesión inválida o expirada"
@@ -139,7 +149,9 @@ function authMiddleware(req, res, next) {
  */
 
 app.post("/auth/register", async (req, res) => {
+
   try {
+
     const {
       name,
       email,
@@ -147,6 +159,7 @@ app.post("/auth/register", async (req, res) => {
     } = req.body;
 
     if (!name || !String(name).trim()) {
+
       return res.status(400).json({
         status: "error",
         message: "Nombre requerido"
@@ -154,6 +167,7 @@ app.post("/auth/register", async (req, res) => {
     }
 
     if (!email || !String(email).trim()) {
+
       return res.status(400).json({
         status: "error",
         message: "Correo requerido"
@@ -161,6 +175,7 @@ app.post("/auth/register", async (req, res) => {
     }
 
     if (!password || password.length < 8) {
+
       return res.status(400).json({
         status: "error",
         message: "La contraseña debe tener al menos 8 caracteres"
@@ -172,17 +187,21 @@ app.post("/auth/register", async (req, res) => {
         .trim()
         .toLowerCase();
 
-    const existing = await pool.query(
-      `
-        SELECT id
-        FROM chatfade_jr.users
-        WHERE LOWER(email) = $1
-        LIMIT 1
-      `,
-      [normalizedEmail]
-    );
+    const existing =
+      await pool.query(
+        `
+          SELECT id
+          FROM chatfade_jr.users
+          WHERE LOWER(email) = $1
+          LIMIT 1
+        `,
+        [normalizedEmail]
+      );
 
-    if (existing.rows.length > 0) {
+    if (
+      existing.rows.length > 0
+    ) {
+
       return res.status(409).json({
         status: "error",
         message: "Ese correo ya está registrado"
@@ -190,38 +209,43 @@ app.post("/auth/register", async (req, res) => {
     }
 
     const passwordHash =
-      await bcrypt.hash(password, 12);
+      await bcrypt.hash(
+        password,
+        12
+      );
 
     const externalId =
       `user_${Date.now()}_${Math.random()
         .toString(36)
         .substring(2, 10)}`;
 
-    const created = await pool.query(
-      `
-        INSERT INTO chatfade_jr.users (
-          external_id,
-          name,
-          email,
-          password_hash
-        )
-        VALUES ($1, $2, $3, $4)
-        RETURNING
-          id,
-          external_id,
-          name,
-          email,
-          created_at
-      `,
-      [
-        externalId,
-        String(name).trim(),
-        normalizedEmail,
-        passwordHash
-      ]
-    );
+    const created =
+      await pool.query(
+        `
+          INSERT INTO chatfade_jr.users (
+            external_id,
+            name,
+            email,
+            password_hash
+          )
+          VALUES ($1, $2, $3, $4)
+          RETURNING
+            id,
+            external_id,
+            name,
+            email,
+            created_at
+        `,
+        [
+          externalId,
+          String(name).trim(),
+          normalizedEmail,
+          passwordHash
+        ]
+      );
 
-    const user = created.rows[0];
+    const user =
+      created.rows[0];
 
     const token =
       createToken(user);
@@ -229,7 +253,7 @@ app.post("/auth/register", async (req, res) => {
     res.status(201).json({
       status: "ok",
       message: "Cuenta creada correctamente",
-      token: token,
+      token,
       user: {
         id: user.id,
         name: user.name,
@@ -238,6 +262,7 @@ app.post("/auth/register", async (req, res) => {
     });
 
   } catch (error) {
+
     console.error(
       "Error register:",
       error
@@ -258,13 +283,16 @@ app.post("/auth/register", async (req, res) => {
  */
 
 app.post("/auth/login", async (req, res) => {
+
   try {
+
     const {
       email,
       password
     } = req.body;
 
     if (!email || !password) {
+
       return res.status(400).json({
         status: "error",
         message: "Correo y contraseña requeridos"
@@ -276,29 +304,34 @@ app.post("/auth/login", async (req, res) => {
         .trim()
         .toLowerCase();
 
-    const result = await pool.query(
-      `
-        SELECT
-          id,
-          external_id,
-          name,
-          email,
-          password_hash
-        FROM chatfade_jr.users
-        WHERE LOWER(email) = $1
-        LIMIT 1
-      `,
-      [normalizedEmail]
-    );
+    const result =
+      await pool.query(
+        `
+          SELECT
+            id,
+            external_id,
+            name,
+            email,
+            password_hash
+          FROM chatfade_jr.users
+          WHERE LOWER(email) = $1
+          LIMIT 1
+        `,
+        [normalizedEmail]
+      );
 
-    if (result.rows.length === 0) {
+    if (
+      result.rows.length === 0
+    ) {
+
       return res.status(401).json({
         status: "error",
         message: "Correo o contraseña incorrectos"
       });
     }
 
-    const user = result.rows[0];
+    const user =
+      result.rows[0];
 
     const validPassword =
       await bcrypt.compare(
@@ -307,6 +340,7 @@ app.post("/auth/login", async (req, res) => {
       );
 
     if (!validPassword) {
+
       return res.status(401).json({
         status: "error",
         message: "Correo o contraseña incorrectos"
@@ -319,7 +353,7 @@ app.post("/auth/login", async (req, res) => {
     res.json({
       status: "ok",
       message: "Sesión iniciada",
-      token: token,
+      token,
       user: {
         id: user.id,
         name: user.name,
@@ -328,6 +362,7 @@ app.post("/auth/login", async (req, res) => {
     });
 
   } catch (error) {
+
     console.error(
       "Error login:",
       error
@@ -353,21 +388,26 @@ app.get(
   async (req, res) => {
 
     try {
-      const result = await pool.query(
-        `
-          SELECT
-            id,
-            external_id,
-            name,
-            email,
-            created_at
-          FROM chatfade_jr.users
-          WHERE id = $1
-        `,
-        [req.auth.userId]
-      );
 
-      if (result.rows.length === 0) {
+      const result =
+        await pool.query(
+          `
+            SELECT
+              id,
+              external_id,
+              name,
+              email,
+              created_at
+            FROM chatfade_jr.users
+            WHERE id = $1
+          `,
+          [req.auth.userId]
+        );
+
+      if (
+        result.rows.length === 0
+      ) {
+
         return res.status(404).json({
           status: "error",
           message: "Usuario no encontrado"
@@ -380,6 +420,12 @@ app.get(
       });
 
     } catch (error) {
+
+      console.error(
+        "Error /auth/me:",
+        error
+      );
+
       res.status(500).json({
         status: "error",
         message: "No fue posible obtener el usuario"
@@ -399,6 +445,7 @@ async function createConversation(
   userId,
   title
 ) {
+
   const result =
     await pool.query(
       `
@@ -428,6 +475,7 @@ async function getConversation(
   conversationId,
   userId
 ) {
+
   const result =
     await pool.query(
       `
@@ -457,31 +505,37 @@ app.get(
   async (req, res) => {
 
     try {
-      const result = await pool.query(
-        `
-          SELECT
-            id,
-            title,
-            created_at,
-            updated_at
-          FROM chatfade_jr.conversations
-          WHERE user_id = $1
-          ORDER BY updated_at DESC
-        `,
-        [req.auth.userId]
-      );
+
+      const result =
+        await pool.query(
+          `
+            SELECT
+              id,
+              title,
+              created_at,
+              updated_at
+            FROM chatfade_jr.conversations
+            WHERE user_id = $1
+            ORDER BY updated_at DESC
+          `,
+          [req.auth.userId]
+        );
 
       res.json({
         status: "ok",
-        conversations:
-          result.rows
+        conversations: result.rows
       });
 
     } catch (error) {
+
+      console.error(
+        "Error conversations:",
+        error
+      );
+
       res.status(500).json({
         status: "error",
-        message:
-          "No fue posible obtener conversaciones"
+        message: "No fue posible obtener conversaciones"
       });
     }
   }
@@ -499,6 +553,7 @@ async function saveMessage(
   role,
   content
 ) {
+
   const result =
     await pool.query(
       `
@@ -537,6 +592,7 @@ async function saveMessage(
 async function getConversationContext(
   conversationId
 ) {
+
   const result =
     await pool.query(
       `
@@ -564,7 +620,10 @@ async function getConversationContext(
  * =========================================================
  */
 
-async function getMemories(userId) {
+async function getMemories(
+  userId
+) {
+
   const result =
     await pool.query(
       `
@@ -574,7 +633,8 @@ async function getMemories(userId) {
           memory_value,
           importance,
           source,
-          created_at
+          created_at,
+          updated_at
         FROM chatfade_jr.memories
         WHERE user_id = $1
         ORDER BY
@@ -589,21 +649,79 @@ async function getMemories(userId) {
 }
 
 
-async function saveMemory(
+async function upsertMemory(
   userId,
   key,
   value,
   importance = 5,
   source = "conversation"
 ) {
-  const existing =
+
+  /*
+   * Para claves conocidas, sustituimos
+   * el valor anterior.
+   */
+
+  if (
+    key !== "explicit_memory"
+  ) {
+
+    const existing =
+      await pool.query(
+        `
+          SELECT id
+          FROM chatfade_jr.memories
+          WHERE user_id = $1
+            AND memory_key = $2
+          ORDER BY updated_at DESC
+          LIMIT 1
+        `,
+        [
+          userId,
+          key
+        ]
+      );
+
+    if (
+      existing.rows.length > 0
+    ) {
+
+      const updated =
+        await pool.query(
+          `
+            UPDATE chatfade_jr.memories
+            SET
+              memory_value = $1,
+              importance = $2,
+              source = $3,
+              updated_at = NOW()
+            WHERE id = $4
+            RETURNING *
+          `,
+          [
+            value,
+            importance,
+            source,
+            existing.rows[0].id
+          ]
+        );
+
+      return updated.rows[0];
+    }
+  }
+
+
+  /*
+   * Evitar duplicados exactos.
+   */
+
+  const duplicate =
     await pool.query(
       `
         SELECT id
         FROM chatfade_jr.memories
         WHERE user_id = $1
-          AND LOWER(memory_value) =
-              LOWER($2)
+          AND LOWER(memory_value) = LOWER($2)
         LIMIT 1
       `,
       [
@@ -612,9 +730,13 @@ async function saveMemory(
       ]
     );
 
-  if (existing.rows.length > 0) {
-    return existing.rows[0];
+  if (
+    duplicate.rows.length > 0
+  ) {
+
+    return duplicate.rows[0];
   }
+
 
   const result =
     await pool.query(
@@ -642,23 +764,36 @@ async function saveMemory(
 }
 
 
+/*
+ * =========================================================
+ * DETECCION LOCAL DE MEMORIA
+ * =========================================================
+ *
+ * Seguimos conservando esta capa aunque Qwen ya responda.
+ * Después haremos extracción semántica con el propio modelo.
+ */
+
 async function detectAndSaveMemory(
   user,
   message
 ) {
-  const text = message.trim();
+
+  const text =
+    message.trim();
 
   const lower =
     text.toLowerCase();
 
+
+  /*
+   * Memoria explícita
+   */
+
   if (
-    lower.startsWith(
-      "recuerda que "
-    ) ||
-    lower.startsWith(
-      "quiero que recuerdes que "
-    )
+    lower.startsWith("recuerda que ") ||
+    lower.startsWith("quiero que recuerdes que ")
   ) {
+
     const value =
       text
         .replace(
@@ -672,7 +807,8 @@ async function detectAndSaveMemory(
         .trim();
 
     if (value) {
-      await saveMemory(
+
+      await upsertMemory(
         user.id,
         "explicit_memory",
         value,
@@ -682,10 +818,16 @@ async function detectAndSaveMemory(
 
       return {
         saved: true,
+        key: "explicit_memory",
         value
       };
     }
   }
+
+
+  /*
+   * Color favorito
+   */
 
   const colorMatch =
     text.match(
@@ -693,6 +835,7 @@ async function detectAndSaveMemory(
     );
 
   if (colorMatch) {
+
     const color =
       colorMatch[1]
         .replace(
@@ -701,7 +844,7 @@ async function detectAndSaveMemory(
         )
         .trim();
 
-    await saveMemory(
+    await upsertMemory(
       user.id,
       "favorite_color",
       color,
@@ -711,10 +854,46 @@ async function detectAndSaveMemory(
 
     return {
       saved: true,
-      value:
-        `Tu color favorito es ${color}`
+      key: "favorite_color",
+      value: color
     };
   }
+
+
+  /*
+   * Equipo favorito / le voy a...
+   */
+
+  const teamMatch =
+    text.match(
+      /(?:le voy al|le voy a|mi equipo favorito es)\s+(.+)/i
+    );
+
+  if (teamMatch) {
+
+    const team =
+      teamMatch[1]
+        .replace(
+          /[.!?]+$/,
+          ""
+        )
+        .trim();
+
+    await upsertMemory(
+      user.id,
+      "favorite_team",
+      team,
+      8,
+      "user"
+    );
+
+    return {
+      saved: true,
+      key: "favorite_team",
+      value: team
+    };
+  }
+
 
   return {
     saved: false
@@ -724,106 +903,7 @@ async function detectAndSaveMemory(
 
 /*
  * =========================================================
- * MOTOR LOCAL
- * =========================================================
- */
-
-async function generateLocalResponse(
-  history,
-  userMessage,
-  user
-) {
-  const lower =
-    userMessage
-      .toLowerCase();
-
-  const memories =
-    await getMemories(
-      user.id
-    );
-
-  if (
-    lower.includes(
-      "cómo me llamo"
-    ) ||
-    lower.includes(
-      "como me llamo"
-    )
-  ) {
-    return user.name
-      ? `Te llamas ${user.name}.`
-      : "Todavía no sé cómo te llamas.";
-  }
-
-  if (
-    lower.includes(
-      "qué recuerdas de mí"
-    ) ||
-    lower.includes(
-      "que recuerdas de mi"
-    ) ||
-    lower.includes(
-      "qué sabes de mí"
-    ) ||
-    lower.includes(
-      "que sabes de mi"
-    )
-  ) {
-    if (
-      memories.length === 0
-    ) {
-      return (
-        "Todavía no tengo recuerdos permanentes sobre ti."
-      );
-    }
-
-    return (
-      "Tengo estos recuerdos sobre ti: " +
-      memories
-        .map(
-          memory =>
-            memory.memory_value
-        )
-        .join(" | ")
-    );
-  }
-
-  if (
-    lower.includes(
-      "cuál es mi color favorito"
-    ) ||
-    lower.includes(
-      "cual es mi color favorito"
-    )
-  ) {
-    const memory =
-      memories.find(
-        item =>
-          item.memory_key ===
-          "favorite_color"
-      );
-
-    if (memory) {
-      return (
-        `Tu color favorito es ${memory.memory_value}.`
-      );
-    }
-
-    return (
-      "Todavía no me has dicho cuál es tu color favorito."
-    );
-  }
-
-  return (
-    `Estoy aprendiendo contigo, ${user.name}. ` +
-    `Recibí tu mensaje: "${userMessage}"`
-  );
-}
-
-
-/*
- * =========================================================
- * CHAT PROTEGIDO
+ * CHAT CON BRAIN / QWEN
  * =========================================================
  */
 
@@ -833,21 +913,24 @@ app.post(
   async (req, res) => {
 
     try {
+
       const {
         message,
         conversationId
       } = req.body;
 
+
       if (
         !message ||
         !String(message).trim()
       ) {
+
         return res.status(400).json({
           status: "error",
-          message:
-            "message es obligatorio"
+          message: "message es obligatorio"
         });
       }
+
 
       const userResult =
         await pool.query(
@@ -863,44 +946,56 @@ app.post(
           [req.auth.userId]
         );
 
+
       if (
         userResult.rows.length === 0
       ) {
+
         return res.status(401).json({
           status: "error",
-          message:
-            "Usuario no encontrado"
+          message: "Usuario no encontrado"
         });
       }
+
 
       const user =
         userResult.rows[0];
 
+
       const userMessage =
         String(message).trim();
 
+
       let conversation;
 
+
+      /*
+       * Conversación existente.
+       */
+
       if (conversationId) {
+
         conversation =
           await getConversation(
-            Number(
-              conversationId
-            ),
+            Number(conversationId),
             user.id
           );
 
+
         if (!conversation) {
-          return res
-            .status(404)
-            .json({
-              status: "error",
-              message:
-                "Conversación no encontrada"
-            });
+
+          return res.status(404).json({
+            status: "error",
+            message: "Conversación no encontrada"
+          });
         }
 
       } else {
+
+        /*
+         * Nueva conversación.
+         */
+
         conversation =
           await createConversation(
             user.id,
@@ -911,11 +1006,21 @@ app.post(
           );
       }
 
+
+      /*
+       * Guardar mensaje del usuario.
+       */
+
       await saveMessage(
         conversation.id,
         "user",
         userMessage
       );
+
+
+      /*
+       * Intentar detectar memoria estructurada.
+       */
 
       const memoryResult =
         await detectAndSaveMemory(
@@ -923,29 +1028,64 @@ app.post(
           userMessage
         );
 
+
+      /*
+       * Recuperar historial.
+       */
+
       const history =
         await getConversationContext(
           conversation.id
         );
 
-      let answer;
+
+      /*
+       * Recuperar memoria permanente.
+       */
+
+      const memories =
+        await getMemories(
+          user.id
+        );
+
+
+      /*
+       * ===================================================
+       * BRAIN
+       * ===================================================
+       */
+
+      const brainResponse =
+        await brain.respond({
+          user,
+          message: userMessage,
+          history,
+          memories
+        });
+
+
+      let answer =
+        brainResponse.text;
+
+
+      /*
+       * Si guardamos explícitamente una memoria,
+       * podemos confirmarlo sin reemplazar
+       * completamente la respuesta del modelo.
+       */
 
       if (
         memoryResult.saved
       ) {
-        answer =
-          `Lo recordaré, ${user.name}: ${memoryResult.value}.`;
-      } else {
-        const brainResponse =
-  await brain.respond({
-    user,
-    message: userMessage,
-    history,
-    memories: await getMemories(user.id)
-  });
 
-answer = brainResponse.text;
+        answer +=
+          `\n\nHe guardado ese dato en tu memoria.`;
       }
+
+
+      /*
+       * Guardar respuesta.
+       */
 
       await saveMessage(
         conversation.id,
@@ -953,12 +1093,28 @@ answer = brainResponse.text;
         answer
       );
 
+
+      /*
+       * Respuesta API.
+       */
+
       res.json({
         status: "ok",
 
         assistant: {
           name: "CHATFADE JR",
-          version: "0.6.0"
+          version: "0.7.3"
+        },
+
+        brain: {
+          provider:
+            brainResponse.provider || null,
+
+          model:
+            brainResponse.model || null,
+
+          evalCount:
+            brainResponse.evalCount || null
         },
 
         user: {
@@ -969,24 +1125,34 @@ answer = brainResponse.text;
 
         conversation: {
           id: conversation.id,
-          title:
-            conversation.title
+          title: conversation.title
+        },
+
+        memory: {
+          savedThisTurn:
+            memoryResult.saved,
+
+          key:
+            memoryResult.key || null
         },
 
         response:
           answer
       });
 
+
     } catch (error) {
+
       console.error(
-        "Error chat:",
+        "Error /chat:",
         error
       );
+
 
       res.status(500).json({
         status: "error",
         message:
-          "CHATFADE JR tuvo un problema"
+          "CHATFADE JR tuvo un problema procesando el mensaje"
       });
     }
   }
@@ -995,7 +1161,7 @@ answer = brainResponse.text;
 
 /*
  * =========================================================
- * MENSAJES PROTEGIDOS
+ * MENSAJES DE CONVERSACION
  * =========================================================
  */
 
@@ -1005,24 +1171,24 @@ app.get(
   async (req, res) => {
 
     try {
+
       const conversation =
         await getConversation(
           Number(
-            req.params
-              .conversationId
+            req.params.conversationId
           ),
           req.auth.userId
         );
 
+
       if (!conversation) {
-        return res
-          .status(404)
-          .json({
-            status: "error",
-            message:
-              "Conversación no encontrada"
-          });
+
+        return res.status(404).json({
+          status: "error",
+          message: "Conversación no encontrada"
+        });
       }
+
 
       const result =
         await pool.query(
@@ -1043,6 +1209,7 @@ app.get(
           ]
         );
 
+
       res.json({
         status: "ok",
         conversationId:
@@ -1051,11 +1218,63 @@ app.get(
           result.rows
       });
 
+
     } catch (error) {
+
+      console.error(
+        "Error messages:",
+        error
+      );
+
+
       res.status(500).json({
         status: "error",
         message:
           "No fue posible obtener mensajes"
+      });
+    }
+  }
+);
+
+
+/*
+ * =========================================================
+ * MEMORIA DEL USUARIO
+ * =========================================================
+ */
+
+app.get(
+  "/memories",
+  authMiddleware,
+  async (req, res) => {
+
+    try {
+
+      const memories =
+        await getMemories(
+          req.auth.userId
+        );
+
+
+      res.json({
+        status: "ok",
+        total: memories.length,
+        memories
+      });
+
+
+    } catch (error) {
+
+      console.error(
+        "Error memories:",
+        error
+      );
+
+
+      res.status(500).json({
+        status: "error",
+        message:
+          "No fue posible obtener la memoria"
       });
     }
   }
@@ -1069,20 +1288,35 @@ app.get(
  */
 
 async function startServer() {
+
   try {
+
     await ensureAuthColumns();
+
 
     app.listen(
       PORT,
       "0.0.0.0",
       () => {
+
         console.log(
-          `CHATFADE JR v0.6.0 iniciado en puerto ${PORT}`
+          `CHATFADE JR v0.7.3 iniciado en puerto ${PORT}`
         );
+
+        console.log(
+          `Brain URL: ${process.env.BRAIN_BASE_URL || "no configurado"}`
+        );
+
+        console.log(
+          `Brain Model: ${process.env.BRAIN_MODEL || "no configurado"}`
+        );
+
       }
     );
 
+
   } catch (error) {
+
     console.error(
       "Error inicializando CHATFADE JR:",
       error
@@ -1091,5 +1325,6 @@ async function startServer() {
     process.exit(1);
   }
 }
+
 
 startServer();
