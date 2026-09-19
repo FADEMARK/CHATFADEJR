@@ -10,6 +10,7 @@ app.use(express.static("public"));
 
 const PORT = process.env.PORT || 3000;
 
+
 /*
  * =========================================================
  * POSTGRESQL
@@ -26,23 +27,16 @@ const pool = new Pool({
 
 /*
  * =========================================================
- * HOME
- * =========================================================
- */
-
-
-
-/*
- * =========================================================
- * HEALTH CHECK
+ * HEALTH
  * =========================================================
  */
 
 app.get("/health", (req, res) => {
-  res.status(200).json({
+  res.json({
     status: "ok",
     service: "chatfade-jr",
-    version: "0.4.0",
+    version: "0.5.0",
+    memory: "persistent",
     timestamp: new Date().toISOString()
   });
 });
@@ -50,14 +44,12 @@ app.get("/health", (req, res) => {
 
 /*
  * =========================================================
- * DATABASE TEST
+ * DB TEST
  * =========================================================
  */
 
 app.get("/db-test", async (req, res) => {
-
   try {
-
     const result = await pool.query(`
       SELECT
         NOW() AS database_time,
@@ -66,38 +58,32 @@ app.get("/db-test", async (req, res) => {
 
     res.json({
       status: "ok",
-      message: "CHATFADE JR conectado a PostgreSQL",
       database: result.rows[0].database_name,
       database_time: result.rows[0].database_time
     });
 
   } catch (error) {
-
-    console.error("Error PostgreSQL:", error);
+    console.error(error);
 
     res.status(500).json({
       status: "error",
-      message: "No fue posible conectar con PostgreSQL"
+      message: "Error conectando a PostgreSQL"
     });
   }
-
 });
 
 
 /*
  * =========================================================
- * OBTENER O CREAR USUARIO
+ * USUARIO
  * =========================================================
  */
 
 async function getOrCreateUser(externalId, name) {
 
-  const existingUser = await pool.query(
+  const existing = await pool.query(
     `
-      SELECT
-        id,
-        external_id,
-        name
+      SELECT id, external_id, name
       FROM chatfade_jr.users
       WHERE external_id = $1
     `,
@@ -105,56 +91,39 @@ async function getOrCreateUser(externalId, name) {
   );
 
 
-  if (existingUser.rows.length > 0) {
+  if (existing.rows.length > 0) {
 
-    const user = existingUser.rows[0];
+    const user = existing.rows[0];
 
-
-    /*
-     * Actualizar nombre si cambió
-     */
     if (name && user.name !== name) {
 
-      const updatedUser = await pool.query(
+      const updated = await pool.query(
         `
           UPDATE chatfade_jr.users
           SET
             name = $1,
             updated_at = NOW()
           WHERE id = $2
-          RETURNING
-            id,
-            external_id,
-            name
+          RETURNING id, external_id, name
         `,
-        [
-          name,
-          user.id
-        ]
+        [name, user.id]
       );
 
-      return updatedUser.rows[0];
+      return updated.rows[0];
     }
-
 
     return user;
   }
 
 
-  /*
-   * Crear usuario
-   */
-  const newUser = await pool.query(
+  const created = await pool.query(
     `
       INSERT INTO chatfade_jr.users (
         external_id,
         name
       )
       VALUES ($1, $2)
-      RETURNING
-        id,
-        external_id,
-        name
+      RETURNING id, external_id, name
     `,
     [
       externalId,
@@ -163,13 +132,13 @@ async function getOrCreateUser(externalId, name) {
   );
 
 
-  return newUser.rows[0];
+  return created.rows[0];
 }
 
 
 /*
  * =========================================================
- * CREAR CONVERSACIÓN
+ * CONVERSACIONES
  * =========================================================
  */
 
@@ -195,14 +164,37 @@ async function createConversation(userId, title) {
     ]
   );
 
-
   return result.rows[0];
+}
+
+
+async function getConversation(conversationId, userId) {
+
+  const result = await pool.query(
+    `
+      SELECT
+        id,
+        user_id,
+        title,
+        created_at,
+        updated_at
+      FROM chatfade_jr.conversations
+      WHERE id = $1
+        AND user_id = $2
+    `,
+    [
+      conversationId,
+      userId
+    ]
+  );
+
+  return result.rows[0] || null;
 }
 
 
 /*
  * =========================================================
- * GUARDAR MENSAJE
+ * MENSAJES
  * =========================================================
  */
 
@@ -234,9 +226,6 @@ async function saveMessage(
   );
 
 
-  /*
-   * Actualizar fecha de conversación
-   */
   await pool.query(
     `
       UPDATE chatfade_jr.conversations
@@ -251,12 +240,6 @@ async function saveMessage(
 }
 
 
-/*
- * =========================================================
- * LEER HISTORIAL
- * =========================================================
- */
-
 async function getConversationContext(
   conversationId
 ) {
@@ -270,7 +253,7 @@ async function getConversationContext(
       FROM chatfade_jr.messages
       WHERE conversation_id = $1
       ORDER BY created_at ASC, id ASC
-      LIMIT 20
+      LIMIT 30
     `,
     [conversationId]
   );
@@ -282,79 +265,280 @@ async function getConversationContext(
 
 /*
  * =========================================================
- * OBTENER CONVERSACIÓN
+ * MEMORIA PERMANENTE
  * =========================================================
  */
 
-async function getConversation(
-  conversationId,
-  userId
+async function saveMemory(
+  userId,
+  key,
+  value,
+  importance = 5,
+  source = "conversation"
 ) {
 
-  const result = await pool.query(
+  /*
+   * Evitar duplicados exactos
+   */
+  const existing = await pool.query(
     `
-      SELECT
-        id,
-        user_id,
-        title,
-        created_at,
-        updated_at
-      FROM chatfade_jr.conversations
-      WHERE id = $1
-        AND user_id = $2
+      SELECT id
+      FROM chatfade_jr.memories
+      WHERE user_id = $1
+        AND LOWER(memory_value) = LOWER($2)
+      LIMIT 1
     `,
     [
-      conversationId,
-      userId
+      userId,
+      value
     ]
   );
 
 
-  if (result.rows.length === 0) {
-    return null;
+  if (existing.rows.length > 0) {
+    return existing.rows[0];
   }
+
+
+  const result = await pool.query(
+    `
+      INSERT INTO chatfade_jr.memories (
+        user_id,
+        memory_key,
+        memory_value,
+        importance,
+        source
+      )
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING
+        id,
+        memory_key,
+        memory_value,
+        importance,
+        source,
+        created_at
+    `,
+    [
+      userId,
+      key,
+      value,
+      importance,
+      source
+    ]
+  );
 
 
   return result.rows[0];
 }
 
 
+async function getMemories(userId) {
+
+  const result = await pool.query(
+    `
+      SELECT
+        id,
+        memory_key,
+        memory_value,
+        importance,
+        source,
+        created_at
+      FROM chatfade_jr.memories
+      WHERE user_id = $1
+      ORDER BY
+        importance DESC,
+        created_at DESC
+      LIMIT 50
+    `,
+    [userId]
+  );
+
+
+  return result.rows;
+}
+
+
 /*
  * =========================================================
- * MOTOR LOCAL INICIAL
+ * DETECTAR RECUERDOS
  * =========================================================
- *
- * Por ahora no usa OpenAI, Gemini ni Anthropic.
- *
- * Esta es nuestra primera capa propia:
- * reglas + usuario + historial.
- *
- * Más adelante reemplazaremos esta función por
- * un motor de lenguaje mucho más potente.
  */
 
-function generateLocalResponse(
+async function detectAndSaveMemory(
+  user,
+  message
+) {
+
+  const text = message.trim();
+  const lower = text.toLowerCase();
+
+
+  /*
+   * "Recuerda que..."
+   */
+  if (
+    lower.startsWith("recuerda que ") ||
+    lower.startsWith("quiero que recuerdes que ")
+  ) {
+
+    const value = text
+      .replace(/^recuerda que\s+/i, "")
+      .replace(/^quiero que recuerdes que\s+/i, "")
+      .trim();
+
+
+    if (value) {
+
+      await saveMemory(
+        user.id,
+        "explicit_memory",
+        value,
+        9,
+        "user"
+      );
+
+      return {
+        saved: true,
+        value: value
+      };
+    }
+  }
+
+
+  /*
+   * Color favorito
+   */
+  const colorMatch =
+    text.match(
+      /mi color favorito es (.+)/i
+    );
+
+
+  if (colorMatch) {
+
+    const color =
+      colorMatch[1]
+        .replace(/[.!?]+$/, "")
+        .trim();
+
+
+    await saveMemory(
+      user.id,
+      "favorite_color",
+      color,
+      8,
+      "user"
+    );
+
+
+    return {
+      saved: true,
+      value: `Tu color favorito es ${color}`
+    };
+  }
+
+
+  /*
+   * Comida favorita
+   */
+  const foodMatch =
+    text.match(
+      /mi comida favorita es (.+)/i
+    );
+
+
+  if (foodMatch) {
+
+    const food =
+      foodMatch[1]
+        .replace(/[.!?]+$/, "")
+        .trim();
+
+
+    await saveMemory(
+      user.id,
+      "favorite_food",
+      food,
+      8,
+      "user"
+    );
+
+
+    return {
+      saved: true,
+      value: `Tu comida favorita es ${food}`
+    };
+  }
+
+
+  /*
+   * Trabajo
+   */
+  const workMatch =
+    text.match(
+      /trabajo (?:en|para) (.+)/i
+    );
+
+
+  if (workMatch) {
+
+    const workplace =
+      workMatch[1]
+        .replace(/[.!?]+$/, "")
+        .trim();
+
+
+    await saveMemory(
+      user.id,
+      "workplace",
+      workplace,
+      7,
+      "user"
+    );
+
+
+    return {
+      saved: true,
+      value: `Trabajas en ${workplace}`
+    };
+  }
+
+
+  return {
+    saved: false
+  };
+}
+
+
+/*
+ * =========================================================
+ * MOTOR LOCAL
+ * =========================================================
+ */
+
+async function generateLocalResponse(
   history,
   userMessage,
   user
 ) {
 
-  const lowerMessage =
+  const lower =
     userMessage.toLowerCase();
+
+  const memories =
+    await getMemories(user.id);
 
 
   /*
-   * ¿Cómo me llamo?
+   * Nombre
    */
   if (
-    lowerMessage.includes("cómo me llamo") ||
-    lowerMessage.includes("como me llamo")
+    lower.includes("cómo me llamo") ||
+    lower.includes("como me llamo")
   ) {
 
     if (user.name) {
-
       return `Te llamas ${user.name}.`;
-
     }
 
     return "Todavía no sé cómo te llamas.";
@@ -362,109 +546,137 @@ function generateLocalResponse(
 
 
   /*
-   * ¿Quién soy?
+   * Memoria permanente
    */
   if (
-    lowerMessage.includes("quién soy") ||
-    lowerMessage.includes("quien soy")
+    lower.includes("qué recuerdas de mí") ||
+    lower.includes("que recuerdas de mi") ||
+    lower.includes("qué sabes de mí") ||
+    lower.includes("que sabes de mi")
   ) {
 
-    if (user.name) {
+    if (memories.length === 0) {
 
-      return `Hasta ahora sé que eres ${user.name}.`;
-
+      return (
+        "Todavía no tengo recuerdos permanentes sobre ti."
+      );
     }
 
-    return "Todavía no tengo suficiente información para decirte quién eres.";
+
+    const memoryText =
+      memories
+        .map(memory => memory.memory_value)
+        .join(" | ");
+
+
+    return (
+      `Tengo estos recuerdos sobre ti: ${memoryText}`
+    );
   }
 
 
   /*
-   * ¿Qué recuerdas?
+   * Color favorito
    */
   if (
-    lowerMessage.includes("qué recuerdas") ||
-    lowerMessage.includes("que recuerdas")
+    lower.includes("cuál es mi color favorito") ||
+    lower.includes("cual es mi color favorito")
   ) {
 
-    const previousUserMessages = history
-      .filter(item => item.role === "user")
-      .map(item => item.content)
-      .filter(content => {
-        return (
-          !content
-            .toLowerCase()
-            .includes("qué recuerdas") &&
-          !content
-            .toLowerCase()
-            .includes("que recuerdas")
-        );
-      });
+    const memory =
+      memories.find(
+        item =>
+          item.memory_key ===
+          "favorite_color"
+      );
 
 
-    if (previousUserMessages.length === 0) {
-
-      return "Todavía no tengo recuerdos suficientes de esta conversación.";
+    if (memory) {
+      return `Tu color favorito es ${memory.memory_value}.`;
     }
 
 
     return (
-      "Recuerdo que me has dicho: " +
-      previousUserMessages.join(" | ")
+      "Todavía no me has dicho cuál es tu color favorito."
     );
   }
 
 
   /*
-   * ¿Recuerdas...?
+   * ¿Dónde trabajo?
    */
   if (
-    lowerMessage.startsWith("recuerdas") ||
-    lowerMessage.startsWith("¿recuerdas")
+    lower.includes("dónde trabajo") ||
+    lower.includes("donde trabajo")
   ) {
 
-    const previousText = history
-      .filter(item => item.role === "user")
-      .map(item => item.content)
-      .join(" ")
-      .toLowerCase();
+    const memory =
+      memories.find(
+        item =>
+          item.memory_key ===
+          "workplace"
+      );
 
 
-    const words = lowerMessage
-      .replace(/[¿?.,]/g, "")
-      .split(/\s+/)
-      .filter(word => word.length >= 5);
+    if (memory) {
 
-
-    const match = words.some(word =>
-      previousText.includes(word)
-    );
-
-
-    if (match) {
-
-      return "Sí, encontré información relacionada en nuestra conversación.";
-
+      return `Me dijiste que trabajas en ${memory.memory_value}.`;
     }
 
 
-    return "No encuentro ese recuerdo todavía en esta conversación.";
+    return (
+      "Todavía no tengo guardado dónde trabajas."
+    );
+  }
+
+
+  /*
+   * Historial de conversación
+   */
+  if (
+    lower.includes("qué recuerdas de nuestra conversación") ||
+    lower.includes("que recuerdas de nuestra conversacion")
+  ) {
+
+    const userMessages =
+      history
+        .filter(
+          item =>
+            item.role === "user"
+        )
+        .map(
+          item => item.content
+        )
+        .filter(
+          content =>
+            !content
+              .toLowerCase()
+              .includes("qué recuerdas")
+        );
+
+
+    if (userMessages.length === 0) {
+
+      return (
+        "Todavía no tengo recuerdos suficientes de esta conversación."
+      );
+    }
+
+
+    return (
+      "En esta conversación recuerdo que me dijiste: " +
+      userMessages.join(" | ")
+    );
   }
 
 
   /*
    * Respuesta general temporal
    */
-  const previousUserMessages = history
-    .filter(item => item.role === "user");
-
-
   return (
-    `Estoy siguiendo nuestra conversación` +
+    `Estoy aprendiendo contigo` +
     `${user.name ? ", " + user.name : ""}. ` +
-    `Este es tu mensaje número ` +
-    `${previousUserMessages.length} en este hilo: ` +
-    `"${userMessage}"`
+    `Recibí tu mensaje: "${userMessage}"`
   );
 }
 
@@ -486,10 +698,6 @@ app.post("/chat", async (req, res) => {
       conversationId
     } = req.body;
 
-
-    /*
-     * Validaciones
-     */
 
     if (!userId) {
 
@@ -517,56 +725,52 @@ app.post("/chat", async (req, res) => {
 
 
     /*
-     * Obtener / crear usuario
+     * Usuario
      */
-
-    const user = await getOrCreateUser(
-      String(userId),
-      name
-    );
+    const user =
+      await getOrCreateUser(
+        String(userId),
+        name
+      );
 
 
     /*
-     * Obtener / crear conversación
+     * Conversación
      */
-
     let conversation;
 
 
     if (conversationId) {
 
-      conversation = await getConversation(
-        Number(conversationId),
-        user.id
-      );
+      conversation =
+        await getConversation(
+          Number(conversationId),
+          user.id
+        );
 
 
       if (!conversation) {
 
         return res.status(404).json({
           status: "error",
-          message: "Conversación no encontrada"
+          message:
+            "Conversación no encontrada"
         });
       }
 
     } else {
 
-      const title =
-        userMessage.substring(0, 80);
-
-
       conversation =
         await createConversation(
           user.id,
-          title
+          userMessage.substring(0, 80)
         );
     }
 
 
     /*
-     * Guardar mensaje del usuario
+     * Guardar mensaje
      */
-
     await saveMessage(
       conversation.id,
       "user",
@@ -575,12 +779,18 @@ app.post("/chat", async (req, res) => {
 
 
     /*
-     * Leer historial.
-     *
-     * Como ya guardamos el mensaje anterior,
-     * history incluye también el mensaje actual.
+     * Detectar recuerdos
      */
+    const memoryResult =
+      await detectAndSaveMemory(
+        user,
+        userMessage
+      );
 
+
+    /*
+     * Historial
+     */
     const history =
       await getConversationContext(
         conversation.id
@@ -590,19 +800,29 @@ app.post("/chat", async (req, res) => {
     /*
      * Generar respuesta
      */
+    let answer;
 
-    const answer =
-      generateLocalResponse(
-        history,
-        userMessage,
-        user
-      );
+
+    if (memoryResult.saved) {
+
+      answer =
+        `Lo recordaré, ${user.name || "usuario"}: ` +
+        `${memoryResult.value}.`;
+
+    } else {
+
+      answer =
+        await generateLocalResponse(
+          history,
+          userMessage,
+          user
+        );
+    }
 
 
     /*
-     * Guardar respuesta de CHATFADE JR
+     * Guardar respuesta
      */
-
     await saveMessage(
       conversation.id,
       "assistant",
@@ -611,21 +831,14 @@ app.post("/chat", async (req, res) => {
 
 
     /*
-     * Respuesta API
+     * Respuesta
      */
-
     res.json({
       status: "ok",
 
       assistant: {
         name: "CHATFADE JR",
-        version: "0.4.0"
-      },
-
-      user: {
-        id: user.id,
-        externalId: user.external_id,
-        name: user.name
+        version: "0.5.0"
       },
 
       conversation: {
@@ -634,7 +847,9 @@ app.post("/chat", async (req, res) => {
       },
 
       memory: {
-        historyMessages: history.length
+        persistent: true,
+        savedThisTurn:
+          memoryResult.saved
       },
 
       response: answer
@@ -661,7 +876,7 @@ app.post("/chat", async (req, res) => {
 
 /*
  * =========================================================
- * VER MENSAJES DE UNA CONVERSACIÓN
+ * MENSAJES DE CONVERSACIÓN
  * =========================================================
  */
 
@@ -677,16 +892,7 @@ app.get(
         );
 
 
-      if (!conversationId) {
-
-        return res.status(400).json({
-          status: "error",
-          message: "conversationId inválido"
-        });
-      }
-
-
-      const messages =
+      const result =
         await pool.query(
           `
             SELECT
@@ -707,24 +913,18 @@ app.get(
         conversationId:
           conversationId,
         total:
-          messages.rows.length,
+          result.rows.length,
         messages:
-          messages.rows
+          result.rows
       });
 
 
     } catch (error) {
 
-      console.error(
-        "Error obteniendo mensajes:",
-        error
-      );
-
-
       res.status(500).json({
         status: "error",
         message:
-          "No fue posible obtener la conversación"
+          "No fue posible obtener mensajes"
       });
     }
   }
@@ -733,7 +933,86 @@ app.get(
 
 /*
  * =========================================================
- * INICIAR CHATFADE JR
+ * VER MEMORIA
+ * =========================================================
+ */
+
+app.get(
+  "/users/:externalId/memories",
+  async (req, res) => {
+
+    try {
+
+      const externalId =
+        req.params.externalId;
+
+
+      const userResult =
+        await pool.query(
+          `
+            SELECT id, name
+            FROM chatfade_jr.users
+            WHERE external_id = $1
+          `,
+          [externalId]
+        );
+
+
+      if (
+        userResult.rows.length === 0
+      ) {
+
+        return res.status(404).json({
+          status: "error",
+          message: "Usuario no encontrado"
+        });
+      }
+
+
+      const user =
+        userResult.rows[0];
+
+
+      const memories =
+        await getMemories(
+          user.id
+        );
+
+
+      res.json({
+        status: "ok",
+
+        user: {
+          id: user.id,
+          name: user.name
+        },
+
+        total:
+          memories.length,
+
+        memories:
+          memories
+      });
+
+
+    } catch (error) {
+
+      console.error(error);
+
+
+      res.status(500).json({
+        status: "error",
+        message:
+          "No fue posible leer la memoria"
+      });
+    }
+  }
+);
+
+
+/*
+ * =========================================================
+ * START
  * =========================================================
  */
 
@@ -743,7 +1022,7 @@ app.listen(
   () => {
 
     console.log(
-      `CHATFADE JR v0.4.0 iniciado en puerto ${PORT}`
+      `CHATFADE JR v0.5.0 iniciado en puerto ${PORT}`
     );
 
   }
