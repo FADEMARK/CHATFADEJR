@@ -4,14 +4,10 @@ import pg from "pg";
 const { Pool } = pg;
 
 const app = express();
-
 app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 
-/*
- * Conexión a PostgreSQL
- */
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: {
@@ -19,22 +15,20 @@ const pool = new Pool({
   }
 });
 
-
 /*
  * Página principal
  */
 app.get("/", (req, res) => {
   res.json({
     name: "CHATFADE JR",
-    version: "0.1.0",
+    version: "0.2.0",
     status: "online",
     message: "Hola. Soy CHATFADE JR."
   });
 });
 
-
 /*
- * Health Check para Render
+ * Health Check
  */
 app.get("/health", (req, res) => {
   res.status(200).json({
@@ -44,15 +38,11 @@ app.get("/health", (req, res) => {
   });
 });
 
-
 /*
- * Prueba de conexión PostgreSQL
- *
- * No crea ni modifica información.
+ * Test de base de datos
  */
 app.get("/db-test", async (req, res) => {
   try {
-
     const result = await pool.query(`
       SELECT
         NOW() AS database_time,
@@ -67,65 +57,129 @@ app.get("/db-test", async (req, res) => {
     });
 
   } catch (error) {
-
     console.error("Error PostgreSQL:", error);
 
     res.status(500).json({
       status: "error",
-      message: "No fue posible conectar con PostgreSQL",
-      error: error.message
+      message: "No fue posible conectar con PostgreSQL"
     });
   }
 });
 
-
 /*
- * SETUP inicial de CHATFADE JR
- *
- * Crea un schema independiente dentro de
- * la misma base de datos.
- *
- * No toca las tablas existentes del schema public.
+ * Setup protegido
  */
-app.get("/setup", async (req, res) => {
+app.post("/admin/setup-memory", async (req, res) => {
   try {
+    const token = req.headers["x-admin-token"];
 
-    /*
-     * Crear schema independiente.
-     */
+    if (
+      !process.env.SETUP_ADMIN_TOKEN ||
+      token !== process.env.SETUP_ADMIN_TOKEN
+    ) {
+      return res.status(401).json({
+        status: "error",
+        message: "No autorizado"
+      });
+    }
+
     await pool.query(`
       CREATE SCHEMA IF NOT EXISTS chatfade_jr
     `);
 
-
     /*
-     * Verificar que exista.
+     * USERS
      */
-    const result = await pool.query(`
-      SELECT schema_name
-      FROM information_schema.schemata
-      WHERE schema_name = 'chatfade_jr'
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS chatfade_jr.users (
+        id BIGSERIAL PRIMARY KEY,
+        external_id VARCHAR(150) UNIQUE,
+        name VARCHAR(200),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
     `);
 
+    /*
+     * CONVERSATIONS
+     */
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS chatfade_jr.conversations (
+        id BIGSERIAL PRIMARY KEY,
+        user_id BIGINT REFERENCES chatfade_jr.users(id) ON DELETE CASCADE,
+        title VARCHAR(300),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+
+    /*
+     * MESSAGES
+     */
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS chatfade_jr.messages (
+        id BIGSERIAL PRIMARY KEY,
+        conversation_id BIGINT REFERENCES chatfade_jr.conversations(id) ON DELETE CASCADE,
+        role VARCHAR(30) NOT NULL,
+        content TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+
+    /*
+     * MEMORIES
+     */
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS chatfade_jr.memories (
+        id BIGSERIAL PRIMARY KEY,
+        user_id BIGINT REFERENCES chatfade_jr.users(id) ON DELETE CASCADE,
+        memory_key VARCHAR(200),
+        memory_value TEXT NOT NULL,
+        importance INTEGER NOT NULL DEFAULT 5,
+        source VARCHAR(100),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+
+    /*
+     * KNOWLEDGE
+     */
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS chatfade_jr.knowledge (
+        id BIGSERIAL PRIMARY KEY,
+        title VARCHAR(300),
+        content TEXT NOT NULL,
+        category VARCHAR(100),
+        source VARCHAR(300),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+
+    const result = await pool.query(`
+      SELECT table_name
+      FROM information_schema.tables
+      WHERE table_schema = 'chatfade_jr'
+      ORDER BY table_name
+    `);
 
     res.json({
       status: "ok",
-      message: "Schema de CHATFADE JR creado correctamente",
-      schema: result.rows[0]?.schema_name || null
+      message: "Memoria inicial de CHATFADE JR creada correctamente",
+      tables: result.rows.map(row => row.table_name)
     });
 
   } catch (error) {
-
-    console.error("Error creando schema:", error);
+    console.error("Error creando memoria:", error);
 
     res.status(500).json({
       status: "error",
-      message: "No fue posible crear el schema de CHATFADE JR",
+      message: "No fue posible crear la memoria inicial",
       error: error.message
     });
   }
 });
-
 
 /*
  * Iniciar servidor
