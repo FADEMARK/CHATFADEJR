@@ -2,26 +2,103 @@
  * =========================================================
  * CHATFADE JR
  * BRAIN CORE
- * Version 0.7.0
+ * Version 0.7.3
  * =========================================================
- *
- * Este archivo será la interfaz entre CHATFADE JR
- * y cualquier modelo de inteligencia que utilicemos.
- *
- * El resto de CHATFADE JR no necesita saber
- * qué modelo está funcionando detrás.
  */
 
+import { ollamaProvider } from "./providers/ollama.js";
 
 export class ChatFadeBrain {
 
   constructor() {
-
     this.name = "CHATFADE JR Brain";
+    this.version = "0.7.3";
+    this.provider = ollamaProvider;
+  }
 
-    this.version = "0.7.0";
 
-    this.provider = "local";
+  /*
+   * =======================================================
+   * SYSTEM PROMPT
+   * =======================================================
+   */
+
+  buildSystemPrompt({
+    user,
+    memories = []
+  }) {
+
+    const memoryText =
+      memories.length > 0
+        ? memories
+            .map(memory => {
+              return `- ${memory.memory_key}: ${memory.memory_value}`;
+            })
+            .join("\n")
+        : "- No hay recuerdos permanentes disponibles todavía.";
+
+
+    return `
+Eres CHATFADE JR.
+
+Tu identidad:
+- Tu nombre es CHATFADE JR.
+- Eres un asistente digital independiente desarrollado como parte del ecosistema FADE.
+- No debes decir que eres Qwen, Alibaba, OpenAI, ChatGPT, Claude ni Gemini.
+- El modelo de lenguaje es solamente tu motor interno.
+- Tú eres CHATFADE JR.
+
+Tu estilo:
+- Responde en español si el usuario habla español.
+- Sé natural, claro y conversacional.
+- No repitas constantemente tu nombre.
+- No inventes datos.
+- No inventes recuerdos.
+- Si no sabes algo, dilo claramente.
+- Usa el historial y la memoria cuando sean relevantes.
+- No digas que "guardaste" algo a menos que el sistema realmente lo haya guardado.
+- No menciones detalles técnicos internos salvo que el usuario los pregunte.
+
+Usuario actual:
+- Nombre: ${user?.name || "desconocido"}
+- Correo: ${user?.email || "desconocido"}
+
+Memoria permanente disponible:
+${memoryText}
+
+IMPORTANTE:
+Los recuerdos anteriores son información suministrada previamente por el usuario.
+Úsalos solo cuando ayuden a responder la pregunta actual.
+`;
+  }
+
+
+  /*
+   * =======================================================
+   * LIMPIAR HISTORIAL
+   * =======================================================
+   */
+
+  prepareHistory(history = []) {
+
+    /*
+     * Render Free tiene poca RAM.
+     *
+     * Por ahora mandamos únicamente
+     * los últimos 10 mensajes.
+     */
+
+    return history
+      .slice(-10)
+      .map(message => ({
+        role:
+          message.role === "assistant"
+            ? "assistant"
+            : "user",
+
+        content:
+          String(message.content)
+      }));
 
   }
 
@@ -40,98 +117,136 @@ export class ChatFadeBrain {
   }) {
 
     /*
-     * Por ahora seguimos utilizando
-     * nuestro motor local.
+     * Provider no configurado.
      *
-     * Después conectaremos aquí
-     * el modelo open-source.
-     */
-
-    const lower =
-      message
-        .toLowerCase()
-        .trim();
-
-
-    /*
-     * NOMBRE
+     * Dejamos fallback local
+     * para que CHATFADE JR
+     * no se caiga completamente.
      */
 
     if (
-      lower.includes("cómo me llamo") ||
-      lower.includes("como me llamo")
+      !this.provider ||
+      !this.provider.isConfigured()
     ) {
 
       return {
         text:
-          user?.name
-            ? `Te llamas ${user.name}.`
-            : "Todavía no sé cómo te llamas.",
+          `Estoy funcionando en modo local, ${user?.name || "usuario"}. ` +
+          `Recibí tu mensaje: "${message}"`,
 
-        provider:
-          this.provider
+        provider: "local-fallback",
+        model: null
       };
 
     }
 
 
-    /*
-     * MEMORIA
-     */
+    try {
 
-    if (
-      lower.includes("qué recuerdas de mí") ||
-      lower.includes("que recuerdas de mi") ||
-      lower.includes("qué sabes de mí") ||
-      lower.includes("que sabes de mi")
-    ) {
+      const systemPrompt =
+        this.buildSystemPrompt({
+          user,
+          memories
+        });
 
-      if (!memories.length) {
 
-        return {
-          text:
-            "Todavía no tengo recuerdos permanentes sobre ti.",
+      const preparedHistory =
+        this.prepareHistory(
+          history
+        );
 
-          provider:
-            this.provider
-        };
+
+      /*
+       * Evitar duplicar el mensaje actual.
+       *
+       * En server.js el mensaje del usuario
+       * ya fue guardado antes de llamar
+       * al Brain.
+       */
+
+      const lastMessage =
+        preparedHistory[
+          preparedHistory.length - 1
+        ];
+
+
+      if (
+        !lastMessage ||
+        lastMessage.role !== "user" ||
+        lastMessage.content !== message
+      ) {
+
+        preparedHistory.push({
+          role: "user",
+          content: message
+        });
 
       }
 
 
-      const memoryText =
-        memories
-          .map(memory =>
-            memory.memory_value
-          )
-          .join(" | ");
+      const result =
+        await this.provider.generate({
+
+          systemPrompt,
+
+          messages:
+            preparedHistory,
+
+          temperature:
+            0.6
+
+        });
 
 
       return {
         text:
-          `Recuerdo esto sobre ti: ${memoryText}`,
+          result.text,
 
         provider:
-          this.provider
+          result.provider,
+
+        model:
+          result.model,
+
+        totalDuration:
+          result.totalDuration || null,
+
+        evalCount:
+          result.evalCount || null
+      };
+
+
+    } catch (error) {
+
+      console.error(
+        "CHATFADE Brain Error:",
+        error
+      );
+
+
+      /*
+       * Si Ollama falla,
+       * CHATFADE JR sigue vivo.
+       */
+
+      return {
+
+        text:
+          `Estoy teniendo dificultades para acceder a mi motor de lenguaje en este momento. ` +
+          `Pero sigo conectado y conservo nuestra conversación.`,
+
+        provider:
+          "error-fallback",
+
+        model:
+          null,
+
+        error:
+          error.message
+
       };
 
     }
-
-
-    /*
-     * RESPUESTA TEMPORAL
-     */
-
-    return {
-
-      text:
-        `Estoy aprendiendo contigo, ${user?.name || "usuario"}. ` +
-        `Entendí tu mensaje: "${message}"`,
-
-      provider:
-        this.provider
-
-    };
 
   }
 
